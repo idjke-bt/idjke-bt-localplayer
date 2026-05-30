@@ -1,90 +1,196 @@
-请用 Python 帮我实现一个完全离线的本地媒体库管理工具，功能类似 Emby 的海报墙 + 详情页，但不需要服务端流媒体，核心是调用外部播放器播放本地视频文件。
+<!-- markdownlint-disable MD033 -->
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python 3.8+">
+  <img src="https://img.shields.io/badge/flask-2.x-green.svg" alt="Flask 2.x">
+  <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License MIT">
+  <img src="https://img.shields.io/badge/platform-Windows-lightgrey.svg" alt="Platform Windows">
+</p>
+
+<p align="center">
+  <h1 align="center">🎬 LocalPlayer</h1>
+  <p align="center">本地媒体库管理工具 · 基于 Flask + SQLite 的轻量级媒体中心</p>
+</p>
+
+---
+
+## 预览
+
+深色主题、Emby 风格界面，支持海报墙浏览、媒体详情、电视剧季/集管理。
+
+- **海报墙** — 响应式网格布局，hover 播放按钮覆盖层，侧边栏按类型/收藏筛选，fanart 动态背景
+- **电影详情** — 左海报 + 右信息布局，fanart 全屏背景渐变遮罩，技术规格标签（分辨率/编码/HDR/音频）
+- **电视剧详情** — 季标签切换，单集横向滚动卡片，缩略图预览，整季/整剧批量标记已看
+- **技术信息** — ffprobe 提取完整视频/音频/字幕流详情，三列网格卡片展示
+- **外部播放器** — 一键调用 mpv / VLC / PotPlayer 播放，自动检测安装路径
+
+---
+
+## 功能
+
+### 媒体扫描
+
+- 递归扫描配置的媒体库根目录，自动识别**电影**和**电视剧**（通过 `tvshow.nfo` 区分）
+- 电视剧季目录识别：`Season 1` / `S01` 等命名格式
+- 解析 Kodi XBMC 格式的 `movie.nfo`、`tvshow.nfo`、单集 NFO，提取完整元数据（标题、导演、演员、评分、简介、时长等）
+- 海报自动发现：精确匹配 `poster.jpg` → 模糊匹配含 `poster`/`folder`/`cover` 关键词的图片
+- 背景图自动发现：精确匹配 `fanart.jpg` → 模糊匹配含 `fanart`/`backdrop`/`background` 关键词的图片
+- 视频文件名智能清理：去除分辨率、编码、音轨、压制组等标签，提取干净标题
+- 视频规格提取：从文件名识别分辨率、编码、HDR 类型、音频格式、来源版本
+- 支持 **ffprobe**（可选）提取详细技术信息：视频/音频/字幕流、比特率、色域、帧率等
+- **全量扫描** 自动清理过期记录；**增量扫描** 仅扫描新增文件夹
+
+### 媒体管理
+
+- 电影/电视剧分开管理，侧边栏快速筛选（全部 / 电影 / 电视剧 / 收藏）
+- 按标题、年份、评分排序；按类型标签筛选；全文搜索（标题/原名/简介）
+- **已看/未看** 状态管理（电影、单集、整季、整剧批量操作）
+- **收藏**功能 — 侧边栏收藏入口，导航栏心形按钮快速切换
+- 删除媒体记录（不影响实际文件）
+
+### 外部播放器
+
+- 自动检测系统中已安装的播放器：mpv / VLC / PotPlayer
+- 播放时设置全屏+窗口置顶参数
+- 播放后自动标记为已看
+
+### 技术信息展示
+
+- 视频流：编解码器、配置/等级、分辨率、宽高比、帧率、比特率、色域、位深度
+- 音频流：编解码器、声道布局、语言、声道数、采样率
+- 字幕流：格式、语言、默认/强制标记
+
+---
 
 ## 技术栈
-- 后端：Python 3.10+，使用 Flask 作为本地 Web 服务器（仅监听 127.0.0.1，不对外暴露）
-- 前端：单页 HTML + vanilla JS + 现代 CSS，由 Flask 提供静态文件服务
-- 数据存储：SQLite 数据库保存媒体库索引、播放进度、收藏状态、已看标记
-- 所有依赖通过 requirements.txt 管理，保证离线可安装
 
-## 文件结构假设
-用户有一个或多个本地根目录（电视的格式如：F:\媒体库\电视剧\黑袍纠察队 (2019)，电影的格式如F:\媒体库\电影\肖申克的救赎 (1994)），内部每个视频一个子文件夹，文件夹内至少包含：
-- 视频文件（mkv/mp4/avi 等常见格式）
-- movie.nfo（标准 Kodi XBMC XML，包含标题、年份、简介、评分等）
-- poster.jpg 或 folder.jpg（海报）
-- fanart.jpg（可选，作为背景图）
-视频文件名作为备选标题来源。
+| 层级   | 技术                                      |
+| ------ | ----------------------------------------- |
+| 后端   | Flask (仅监听 127.0.0.1)                  |
+| 数据库 | SQLite (WAL 模式, 外键约束)               |
+| 前端   | 原生 HTML/CSS/JS (零外部依赖)              |
+| 元数据 | ElementTree 解析 Kodi NFO XML             |
+| 媒体信息 | ffprobe (可选, JSON 输出)               |
+| 扫描进度 | Server-Sent Events (SSE)                |
+| 文件夹选择 | PowerShell 调用 Windows.Forms         |
 
-如果是电视剧，结构类似但需要支持 tvshow.nfo 和单集信息，这个版本可先只处理电影，后续扩展。
+---
 
-## 核心功能模块
+## 快速开始
 
-### 1. 媒体扫描器（纯离线）
-- 递归扫描所有配置的根目录，找出所有包含视频文件的子文件夹
-- 解析每个文件夹内的 movie.nfo，提取：标题(title)、原名(originaltitle)、年份(year)、简介(plot)、评分(rating)、类型(genre)等
-- 识别海报图片（poster.jpg/folder.jpg 优先）和 fanart.jpg
-- 如果没有 nfo 文件，则使用视频文件名作为标题，年份留空，简介为“无简介”
-- 扫描结果写入 SQLite 数据库，后续增量更新（基于文件夹路径去重，避免重复扫描）
-- 支持手动触发重新扫描（前端按钮）
+### 环境要求
 
-### 2. 本地播放器配置与调用
-- 在设置页面允许用户配置外部播放器可执行文件路径（默认值：D:\tools\mpv-lazy\mpv-lazy.exe）
-- 保存到配置文件（config.json）或数据库中
-- 播放逻辑：在前端点击“播放”按钮时，后端通过 subprocess.Popen 启动配置的播放器，并传入视频文件的绝对路径作为参数
-- 播放器启动后后端立即返回成功，不等待播放器进程结束
+- Python 3.8+
+- Windows 操作系统
+- （可选）[ffprobe](https://ffmpeg.org/download.html) — 获取详细技术信息
 
-### 3. 海报墙界面（类似 Emby 主页）
-- 响应式网格布局，展示所有已扫描的电影海报
-- 每张海报下方显示标题和年份
-- 支持按标题、年份、评分排序，以及按类型筛选（从前端过滤）
-- 在未播放过的电影海报上显示“NEW”角标，已看过的显示“已看”标记
+### 安装与启动
 
-### 4. 视频详情页
-- 点击海报进入详情页，显示：
-  - 大尺寸海报 + fanart 背景
-  - 完整标题、原名、年份、评分、类型、详细简介
-  - “播放”按钮（调用外部播放器）
-  - “标记已看/未看”按钮
-  - “收藏/取消收藏”按钮（用心形图标）
-- 如果该视频之前被播放过，显示“上次播放位置”小进度条（仅 UI 示意，不实际控制 mpv，因为 mpv-lazy 自身会记住进度，我们只是在详情页提示用户有记录）
-- 进度数据来自数据库，记录视频总时长和上次播放到的秒数（可通过 mpv 的交流实现，但本版本简化：仅记录该视频被打开播放过，进度条显示固定值或“上次观看”字样，不精确读取真实进度）
+```bash
+# 克隆仓库
+git clone <your-repo-url>
+cd localplayer
 
-### 5. 状态管理
-- 数据库中维护每部电影的字段：is_watched (bool), is_favorite (bool), last_played_time (datetime), play_progress (int, 秒)
-- 点击播放时自动标记 last_played_time 为当前时间，并设置 play_progress 为 0（或保留不变，待未来实现精确进度）
-- 前端通过 API 获取这些状态并更新按钮样式
+# 创建 conda 环境
+conda create -n localplayer python=3.10
+conda activate localplayer
 
-### 6. 设置页面（前端配置界面）
-- 媒体库根目录管理（添加/移除多个文件夹）
-- 外部播放器路径设置
-- 手动触发扫描按钮
-- 扫描日志查看（可选）
+# 安装依赖
+pip install flask
 
-## 后端 API 设计（RESTful JSON 只是建议，根据实际修改）
-- GET /api/movies – 获取所有电影列表（支持 sort, genre 参数）
-- GET /api/movies/<id> – 获取单部电影详情
-- POST /api/movies/<id>/play – 触发外部播放器播放，同时更新播放记录
-- POST /api/movies/<id>/watched – 切换已看状态
-- POST /api/movies/<id>/favorite – 切换收藏状态
-- POST /api/scan – 触发扫描
-- GET/POST /api/settings – 获取/更新设置
+# 启动应用
+python app.py
+```
 
-## 前端 UI 要求
-- 整体深色主题，现代简洁风格，类似 Emby/Jellyfin 的观感
-- 使用 CSS Grid 或 Flexbox 实现海报墙
-- 卡片带圆角、阴影、悬停放大效果
-- 图标可选用简单的 Unicode 符号或内联 SVG，避免外部图标库以保证离线
-- 无需登录功能，因为只有本地使用
+启动后自动打开浏览器访问 `http://127.0.0.1:5000`。
 
-## 启动方式
-- 运行 python app.py 后，终端输出本地访问地址（如 http://127.0.0.1:5000），自动打开浏览器或手动访问
-- 确保程序运行时不会主动联网下载任何资源
+### 初始配置
 
-## 重要约束
-- 整个项目必须纯离线运行，不依赖任何外部网络请求
-- 所有第三方库（Flask、sqlite3 等）须为 Python 标准库或纯离线可安装的包
-- 代码结构清晰，注释完整，方便我后续扩展
-- 请给出完整的项目文件列表（app.py, scanner.py, database.py, templates/index.html, static/style.css, static/app.js, requirements.txt, config_sample.json）
+1. 进入**设置**页 → 添加媒体库根目录（存放电影/电视剧的文件夹路径）
+2. 点击**立即扫描**，等待扫描完成
+3. 回到海报墙，即可浏览和管理媒体库
 
-请基于以上需求生成可直接运行的 Python 项目代码。
+---
 
+## 项目结构
 
+```
+localplayer/
+├── app.py              # Flask 主应用, REST API 路由
+├── database.py         # SQLite 数据库模块, CRUD 操作
+├── scanner.py          # 媒体扫描器, NFO 解析, 文件查找
+├── templates/
+│   └── index.html      # 单页应用 HTML
+├── static/
+│   ├── app.js          # 前端逻辑 (海报墙/详情/设置/扫描)
+│   └── style.css       # Emby 风格深色主题, 响应式布局
+├── logs/               # 运行日志 (app.log / error.log)
+├── localplayer.db      # SQLite 数据库文件
+└── README.md
+```
+
+---
+
+## API 概览
+
+| 方法   | 路径                              | 说明                   |
+| ------ | --------------------------------- | ---------------------- |
+| GET    | `/api/movies`                     | 电影列表 (sort/genre/favorite/search) |
+| GET    | `/api/movies/<id>`                | 电影详情               |
+| POST   | `/api/movies/<id>/play`           | 调用外部播放器播放     |
+| POST   | `/api/movies/<id>/watched`        | 切换已看状态           |
+| POST   | `/api/movies/<id>/favorite`       | 切换收藏状态           |
+| DELETE | `/api/movies/<id>`                | 删除电影记录           |
+| GET    | `/api/shows`                      | 电视剧列表             |
+| GET    | `/api/shows/<id>`                 | 电视剧详情             |
+| GET    | `/api/shows/<id>/episodes`        | 单集列表（按季分组）   |
+| POST   | `/api/shows/<id>/favorite`        | 切换电视剧收藏         |
+| POST   | `/api/shows/<id>/watched`         | 整剧批量标记已看       |
+| DELETE | `/api/shows/<id>`                 | 删除电视剧及单集       |
+| POST   | `/api/episodes/<id>/play`         | 播放单集               |
+| POST   | `/api/episodes/<id>/watched`      | 单集已看切换           |
+| GET    | `/api/all_media`                  | 电影+电视剧统一查询    |
+| GET    | `/api/genres`                     | 所有类型标签           |
+| POST   | `/api/scan`                       | 触发扫描 (mode=full/incremental) |
+| GET    | `/api/scan/progress`              | SSE 扫描进度推送       |
+| POST   | `/api/reset`                      | 重置数据库             |
+| GET    | `/api/settings`                   | 读取设置               |
+| POST   | `/api/settings`                   | 更新设置               |
+| POST   | `/api/browse-folder`              | 系统文件夹选择对话框   |
+
+---
+
+## 数据目录规范
+
+扫描器按以下规范识别文件夹内的媒体资源：
+
+```
+电影/
+├── Avatar (2009)/
+│   ├── Avatar.2009.2160p.BluRay.x265.mkv    # 视频文件
+│   ├── movie.nfo                             # Kodi 元数据 (可选)
+│   ├── poster.jpg                            # 海报
+│   └── fanart.jpg                            # 背景图 (可选)
+
+电视剧/
+├── Breaking Bad/
+│   ├── tvshow.nfo                            # 电视剧元数据
+│   ├── poster.jpg                            # 海报
+│   ├── fanart.jpg                            # 背景图
+│   ├── Season 1/
+│   │   ├── Breaking.Bad.S01E01.mkv
+│   │   ├── Breaking.Bad.S01E01-thumb.jpg     # 缩略图 (可选)
+│   │   └── Breaking.Bad.S01E01.nfo           # 单集元数据 (可选)
+│   └── Season 2/
+│       └── ...
+```
+
+- 支持的视频格式：`.mkv` `.mp4` `.avi` `.mov` `.wmv` `.flv` `.webm` `.m4v` `.mpg` `.mpeg`
+- 海报匹配优先级：`poster.jpg/png` > `folder.jpg/png` > `cover.jpg/png` > 含关键词模糊匹配
+- 背景图匹配优先级：`fanart.jpg/png` > `backdrop.jpg` > `background.jpg` > 含关键词模糊匹配
+- 视频文件名自动清理：移除分辨率、编码、音轨、压制组等标签，提取干净的媒体标题
+
+---
+
+## License
+
+MIT

@@ -48,11 +48,6 @@
                     <span class="sidebar-icon">&#9825;</span> 收藏
                 </button>
             </nav>
-            <div class="sidebar-watched-filter">
-                <button class="sidebar-btn sidebar-watched active" data-watched="">全部</button>
-                <button class="sidebar-btn sidebar-watched" data-watched="false">未看</button>
-                <button class="sidebar-btn sidebar-watched" data-watched="true">已看</button>
-            </div>
         </aside>
 
         <!-- ─── 主内容区 ─── -->
@@ -69,6 +64,11 @@
                         </select>
                         <select id="genre-select">
                             <option value="">全部类型</option>
+                        </select>
+                        <select id="watched-select">
+                            <option value="">全部状态</option>
+                            <option value="false">未看</option>
+                            <option value="true">已看</option>
                         </select>
                         <div class="search-box">
                             <input type="text" id="search-input" placeholder="搜索标题、原名或简介...">

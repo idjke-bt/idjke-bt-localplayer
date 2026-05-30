@@ -118,10 +118,6 @@ body {
 #sidebar.collapsed .sidebar-btn span:not(.sidebar-icon) {
     display: none;
 }
-#sidebar.collapsed .sidebar-watched-filter .sidebar-btn {
-    padding: 8px 4px;
-    font-size: 12px;
-}
 #sidebar.collapsed .sidebar-icon {
     font-size: 18px;
     width: auto;
@@ -163,19 +159,6 @@ body {
 .sidebar-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
 
 .sidebar-fav.active { color: var(--accent); }
-
-.sidebar-watched-filter {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 12px 8px 0;
-    margin-top: 12px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-}
-.sidebar-watched-filter .sidebar-btn {
-    padding: 7px 16px;
-    font-size: 13px;
-}
 
 #main-content {
     flex: 1;

@@ -389,7 +389,26 @@ def get_shows(sort_by="title", genre=None, favorite_only=False, search=None, wat
         params,
     ).fetchall()
     conn.close()
-    return [_deserialize_metadata(dict(row)) for row in rows]
+    shows = [_deserialize_metadata(dict(row)) for row in rows]
+
+    # 批量计算每个电视剧的 is_watched 状态（全部单集已看才算已看）
+    if shows:
+        conn = get_connection()
+        show_ids = [s["id"] for s in shows]
+        placeholders = ",".join("?" * len(show_ids))
+        all_watched_rows = conn.execute(
+            f"""SELECT show_id FROM episodes
+                WHERE show_id IN ({placeholders})
+                GROUP BY show_id
+                HAVING COUNT(*) > 0 AND COUNT(*) = SUM(is_watched)""",
+            show_ids,
+        ).fetchall()
+        all_watched_ids = {row["show_id"] for row in all_watched_rows}
+        conn.close()
+        for s in shows:
+            s["is_watched"] = s["id"] in all_watched_ids
+
+    return shows
 
 
 def get_show(show_id):

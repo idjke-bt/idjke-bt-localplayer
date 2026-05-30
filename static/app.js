@@ -19,7 +19,6 @@ let currentFilter = "all";        // all | movie | tvshow | favorite
 let currentTVSeason = null;
 let currentTVScrollLeft = 0;
 let favoritesOnly = false;
-let currentWatched = "";         // "" = all, "true" = watched, "false" = unwatched
 let currentEpisodes = [];        // 当前电视剧的单集数据（用于季切换）
 let searchQuery = "";
 let _searchTimer = null;
@@ -145,7 +144,8 @@ async function loadPosterWall() {
     } else {
         url = `${API_BASE}/all_media?sort=${sortBy}&genre=${encodeURIComponent(genre)}`;
     }
-    if (currentWatched) url += `&watched=${currentWatched}`;
+    const watchedVal = document.getElementById("watched-select").value;
+    if (watchedVal) url += `&watched=${watchedVal}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
 
     try {
@@ -822,7 +822,7 @@ async function toggleEpisodeWatched(episodeId) {
         const result = await apiPost(`${API_BASE}/episodes/${episodeId}/watched`);
         // 同步服务器状态到 DOM
         if (card && badge) {
-            const serverWatched = result.is_watched;
+            const serverWatched = !!result.is_watched;
             const domWatched = badge.classList.contains("watched");
             if (serverWatched !== domWatched) {
                 card.classList.toggle("ep-watched");
@@ -1415,24 +1415,15 @@ function init() {
         loadPosterWall();
     });
 
-    // 工具栏
+    // 工具栏筛选
     document.getElementById("sort-select").addEventListener("change", loadPosterWall);
     document.getElementById("genre-select").addEventListener("change", loadPosterWall);
+    document.getElementById("watched-select").addEventListener("change", loadPosterWall);
     document.getElementById("btn-rescan").addEventListener("click", triggerScanFromWall);
 
     // 搜索
     document.getElementById("search-input").addEventListener("input", handleSearchInput);
     document.getElementById("btn-search-clear").addEventListener("click", clearSearch);
-
-    // 已看/未看筛选按钮
-    document.querySelectorAll(".sidebar-watched").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            document.querySelectorAll(".sidebar-watched").forEach((b) => b.classList.remove("active"));
-            btn.classList.add("active");
-            currentWatched = btn.dataset.watched;
-            loadPosterWall();
-        });
-    });
 
     // 收藏筛选按钮
     document.getElementById("btn-nav-fav").addEventListener("click", toggleFavoritesFilter);

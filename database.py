@@ -1,23 +1,21 @@
 """
 database.py — SQLite 数据库模块
-负责数据库初始化、媒体库表与设置表的 CRUD 操作。
+负责数据库初始化、电影/电视剧/单集表与设置表的 CRUD 操作。
 """
 
 import sqlite3
 import json
+import logging
 import os
+import re
 from datetime import datetime
 
-# 数据库文件路径，默认放在项目根目录
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "localplayer.db")
+logger = logging.getLogger("database")
 
-# =============================================================================
-# 数据库连接
-# =============================================================================
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "localplayer.db")
 
 
 def get_connection():
-    """获取数据库连接（自动启用 WAL 模式和行工厂）。"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -29,254 +27,265 @@ def get_connection():
 # 初始化
 # =============================================================================
 
-
 def init_db():
-    """初始化数据库：创建 movies 表和 settings 表（如不存在）。"""
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
+    # --- movies 表 ---
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS movies (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            folder_path     TEXT    NOT NULL UNIQUE,       -- 视频文件夹的绝对路径，用作去重键
-            title           TEXT    NOT NULL,               -- 影片标题
-            original_title  TEXT    DEFAULT '',             -- 原名
-            year            TEXT    DEFAULT '',             -- 年份
-            plot            TEXT    DEFAULT '',             -- 简介
-            rating          TEXT    DEFAULT '',             -- 评分
-            genre           TEXT    DEFAULT '',             -- 类型（逗号分隔）
-            poster_path     TEXT    DEFAULT '',             -- 海报图片绝对路径
-            fanart_path     TEXT    DEFAULT '',             -- 背景图片绝对路径
-            video_path      TEXT    DEFAULT '',             -- 视频文件绝对路径
-            director        TEXT    DEFAULT '',             -- 导演
-            writer          TEXT    DEFAULT '',             -- 编剧
-            actors          TEXT    DEFAULT '',             -- 演员（JSON 数组）
-            runtime         TEXT    DEFAULT '',             -- 时长（分钟）
-            is_watched      INTEGER DEFAULT 0,             -- 是否已看 (0/1)
-            is_favorite     INTEGER DEFAULT 0,             -- 是否收藏 (0/1)
-            last_played_time TEXT   DEFAULT NULL,           -- 上次播放时间 (ISO格式)
-            play_progress   INTEGER DEFAULT 0,             -- 播放进度 (秒)
-            created_at      TEXT    NOT NULL,               -- 记录创建时间
-            updated_at      TEXT    NOT NULL                -- 记录更新时间
+            folder_path     TEXT    NOT NULL UNIQUE,
+            title           TEXT    NOT NULL,
+            original_title  TEXT    DEFAULT '',
+            year            TEXT    DEFAULT '',
+            plot            TEXT    DEFAULT '',
+            rating          TEXT    DEFAULT '',
+            genre           TEXT    DEFAULT '',
+            poster_path     TEXT    DEFAULT '',
+            fanart_path     TEXT    DEFAULT '',
+            video_path      TEXT    DEFAULT '',
+            director        TEXT    DEFAULT '',
+            writer          TEXT    DEFAULT '',
+            actors          TEXT    DEFAULT '',
+            runtime         TEXT    DEFAULT '',
+            is_watched      INTEGER DEFAULT 0,
+            is_favorite     INTEGER DEFAULT 0,
+            last_played_time TEXT   DEFAULT NULL,
+            play_progress   INTEGER DEFAULT 0,
+            created_at      TEXT    NOT NULL,
+            updated_at      TEXT    NOT NULL
         )
-        """
-    )
+    """)
 
-    # 兼容旧库：为新字段添加列（如不存在）
-    new_columns = {
+    # 兼容旧库：为新字段添加列
+    new_movie_cols = {
         "director": "TEXT DEFAULT ''",
         "writer": "TEXT DEFAULT ''",
         "actors": "TEXT DEFAULT ''",
         "runtime": "TEXT DEFAULT ''",
     }
     existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(movies)")}
-    for col_name, col_def in new_columns.items():
+    for col_name, col_def in new_movie_cols.items():
         if col_name not in existing_cols:
             cursor.execute(f"ALTER TABLE movies ADD COLUMN {col_name} {col_def}")
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS settings (
-            key   TEXT PRIMARY KEY,   -- 设置项名称
-            value TEXT NOT NULL       -- 设置项值（JSON 字符串或普通字符串）
-        )
-        """
-    )
+    new_movie_cols2 = {"video_specs": "TEXT DEFAULT ''"}
+    existing_cols2 = {row[1] for row in cursor.execute("PRAGMA table_info(movies)")}
+    for col_name, col_def in new_movie_cols2.items():
+        if col_name not in existing_cols2:
+            cursor.execute(f"ALTER TABLE movies ADD COLUMN {col_name} {col_def}")
 
-    # 初始化默认设置（仅在不存在时写入）
+    new_movie_cols3 = {"media_info": "TEXT DEFAULT ''"}
+    existing_cols3 = {row[1] for row in cursor.execute("PRAGMA table_info(movies)")}
+    for col_name, col_def in new_movie_cols3.items():
+        if col_name not in existing_cols3:
+            cursor.execute(f"ALTER TABLE movies ADD COLUMN {col_name} {col_def}")
+
+    # --- shows 表（电视剧） ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shows (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_path     TEXT    NOT NULL UNIQUE,
+            title           TEXT    NOT NULL,
+            original_title  TEXT    DEFAULT '',
+            year            TEXT    DEFAULT '',
+            plot            TEXT    DEFAULT '',
+            rating          TEXT    DEFAULT '',
+            genre           TEXT    DEFAULT '',
+            poster_path     TEXT    DEFAULT '',
+            fanart_path     TEXT    DEFAULT '',
+            director        TEXT    DEFAULT '',
+            writer          TEXT    DEFAULT '',
+            actors          TEXT    DEFAULT '',
+            is_favorite     INTEGER DEFAULT 0,
+            season_count    INTEGER DEFAULT 0,
+            created_at      TEXT    NOT NULL,
+            updated_at      TEXT    NOT NULL
+        )
+    """)
+
+    # --- episodes 表（单集） ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS episodes (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            show_id         INTEGER NOT NULL,
+            season          INTEGER NOT NULL,
+            episode         INTEGER NOT NULL,
+            title           TEXT    DEFAULT '',
+            plot            TEXT    DEFAULT '',
+            rating          TEXT    DEFAULT '',
+            thumb_path      TEXT    DEFAULT '',
+            video_path      TEXT    DEFAULT '',
+            is_watched      INTEGER DEFAULT 0,
+            created_at      TEXT    NOT NULL,
+            updated_at      TEXT    NOT NULL,
+            FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE,
+            UNIQUE(show_id, season, episode)
+        )
+    """)
+
+    # --- settings 表 ---
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
     defaults = {
         "media_roots": json.dumps([], ensure_ascii=True),
         "player_path": r"D:\tools\mpv-lazy\mpv-lazy.exe",
     }
     for key, value in defaults.items():
         cursor.execute(
-            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
-            (key, value),
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value)
         )
+
+    # 兼容旧库：为 shows 表添加 video_specs 列
+    new_show_cols = {"video_specs": "TEXT DEFAULT ''"}
+    existing_show_cols = {row[1] for row in cursor.execute("PRAGMA table_info(shows)")}
+    for col_name, col_def in new_show_cols.items():
+        if col_name not in existing_show_cols:
+            cursor.execute(f"ALTER TABLE shows ADD COLUMN {col_name} {col_def}")
+
+    # 兼容旧库：为 episodes 表添加 media_info 列
+    new_ep_cols = {"media_info": "TEXT DEFAULT ''"}
+    existing_ep_cols = {row[1] for row in cursor.execute("PRAGMA table_info(episodes)")}
+    for col_name, col_def in new_ep_cols.items():
+        if col_name not in existing_ep_cols:
+            cursor.execute(f"ALTER TABLE episodes ADD COLUMN {col_name} {col_def}")
 
     conn.commit()
     conn.close()
-
-
-# =============================================================================
-# 电影 CRUD
+    logger.info("数据库初始化完成")
 # =============================================================================
 
+def _deserialize_metadata(row):
+    """将数据库中的 JSON 字符串字段反序列化为列表，兼容旧逗号分隔格式。"""
+    for field in ("genre", "director", "writer"):
+        val = row.get(field)
+        if isinstance(val, str) and val:
+            try:
+                row[field] = json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                row[field] = [g.strip() for g in re.split(r'[,/]', val) if g.strip()]
+        elif not val:
+            row[field] = []
+    # actors
+    val = row.get("actors")
+    if isinstance(val, str) and val:
+        try:
+            row["actors"] = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            row["actors"] = []
+    elif not val:
+        row["actors"] = []
+    return row
 
-def get_movies(sort_by="title", genre=None):
-    """
-    获取所有电影列表，支持排序和类型筛选。
-
-    Args:
-        sort_by: 排序字段，可选 "title", "year", "rating"
-        genre: 类型筛选字符串（大小写不敏感模糊匹配），为 None 则不过滤
-
-    Returns:
-        list[dict]: 电影信息字典列表
-    """
-    # 排序字段白名单，防止 SQL 注入
+def get_movies(sort_by="title", genre=None, favorite_only=False, search=None):
     allowed_sort = {
         "title": "title COLLATE NOCASE ASC",
         "year": "year DESC",
         "rating": "CAST(rating AS REAL) DESC",
     }
     order_clause = allowed_sort.get(sort_by, "title COLLATE NOCASE ASC")
+    conditions = []
+    params = []
+    if genre:
+        conditions.append("genre LIKE ?")
+        params.append(f"%{genre}%")
+    if favorite_only:
+        conditions.append("is_favorite = 1")
+    if search and search.strip():
+        kw = f"%{search.strip()}%"
+        conditions.append("(title LIKE ? OR original_title LIKE ? OR plot LIKE ?)")
+        params.extend([kw, kw, kw])
+    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     conn = get_connection()
-    if genre:
-        rows = conn.execute(
-            f"SELECT * FROM movies WHERE genre LIKE ? ORDER BY {order_clause}",
-            (f"%{genre}%",),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            f"SELECT * FROM movies ORDER BY {order_clause}"
-        ).fetchall()
+    rows = conn.execute(
+        f"SELECT *, 'movie' AS media_type FROM movies {where_clause} ORDER BY {order_clause}",
+        params,
+    ).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return [_deserialize_metadata(dict(row)) for row in rows]
 
 
 def get_movie(movie_id):
-    """
-    根据 ID 获取单部电影详情。
-
-    Args:
-        movie_id: 电影 ID
-
-    Returns:
-        dict | None: 电影信息字典，不存在则返回 None
-    """
     conn = get_connection()
-    row = conn.execute("SELECT * FROM movies WHERE id = ?", (movie_id,)).fetchone()
+    row = conn.execute("SELECT *, 'movie' AS media_type FROM movies WHERE id = ?", (movie_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _deserialize_metadata(dict(row)) if row else None
 
+
+def _json_arr(val):
+    """将 Python 列表序列化为 JSON 字符串；若已是字符串则原样返回。"""
+    if isinstance(val, list):
+        return json.dumps(val, ensure_ascii=True)
+    return val if val else "[]"
 
 def upsert_movie(folder_path, data):
-    """
-    插入或更新电影记录（基于 folder_path 去重）。
-
-    Args:
-        folder_path: 视频文件夹绝对路径（唯一键）
-        data: 包含 title, original_title, year, plot, rating, genre,
-              director, writer, actors, runtime,
-              poster_path, fanart_path, video_path 的字典
-
-    Returns:
-        int: 受影响行的 id
-    """
     conn = get_connection()
     now = datetime.now().isoformat()
-
-    # 序列化演员列表
     actors_json = json.dumps(data.get("actors", []), ensure_ascii=True)
-
-    existing = conn.execute(
-        "SELECT id FROM movies WHERE folder_path = ?", (folder_path,)
-    ).fetchone()
-
+    genre_json = _json_arr(data.get("genre", []))
+    director_json = _json_arr(data.get("director", []))
+    writer_json = _json_arr(data.get("writer", []))
+    existing = conn.execute("SELECT id FROM movies WHERE folder_path = ?", (folder_path,)).fetchone()
     if existing:
-        # 更新已有记录
-        conn.execute(
-            """
-            UPDATE movies SET
-                title          = ?, original_title = ?, year   = ?,
-                plot           = ?, rating         = ?, genre  = ?,
-                director       = ?, writer         = ?, actors = ?,
-                runtime        = ?,
-                poster_path    = ?, fanart_path    = ?, video_path = ?,
-                updated_at     = ?
-            WHERE folder_path = ?
-            """,
-            (
-                data["title"],
-                data.get("original_title", ""),
-                data.get("year", ""),
-                data.get("plot", ""),
-                data.get("rating", ""),
-                data.get("genre", ""),
-                data.get("director", ""),
-                data.get("writer", ""),
-                actors_json,
-                data.get("runtime", ""),
-                data.get("poster_path", ""),
-                data.get("fanart_path", ""),
-                data.get("video_path", ""),
-                now,
-                folder_path,
-            ),
-        )
+        conn.execute("""
+            UPDATE movies SET title=?, original_title=?, year=?, plot=?, rating=?, genre=?,
+            director=?, writer=?, actors=?, runtime=?,
+            poster_path=?, fanart_path=?, video_path=?, video_specs=?, media_info=?, updated_at=?
+            WHERE folder_path=?
+        """, (
+            data["title"], data.get("original_title", ""), data.get("year", ""),
+            data.get("plot", ""), data.get("rating", ""), genre_json,
+            director_json, writer_json, actors_json,
+            data.get("runtime", ""),
+            data.get("poster_path", ""), data.get("fanart_path", ""), data.get("video_path", ""),
+            data.get("video_specs", ""), data.get("media_info", ""),
+            now, folder_path,
+        ))
         movie_id = existing["id"]
     else:
-        # 插入新记录
-        cursor = conn.execute(
-            """
-            INSERT INTO movies (
-                folder_path, title, original_title, year, plot,
-                rating, genre, director, writer, actors, runtime,
-                poster_path, fanart_path, video_path,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                folder_path,
-                data["title"],
-                data.get("original_title", ""),
-                data.get("year", ""),
-                data.get("plot", ""),
-                data.get("rating", ""),
-                data.get("genre", ""),
-                data.get("director", ""),
-                data.get("writer", ""),
-                actors_json,
-                data.get("runtime", ""),
-                data.get("poster_path", ""),
-                data.get("fanart_path", ""),
-                data.get("video_path", ""),
-                now,
-                now,
-            ),
-        )
+        cursor = conn.execute("""
+            INSERT INTO movies (folder_path, title, original_title, year, plot, rating,
+            genre, director, writer, actors, runtime,
+            poster_path, fanart_path, video_path, video_specs, media_info, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            folder_path, data["title"], data.get("original_title", ""), data.get("year", ""),
+            data.get("plot", ""), data.get("rating", ""), genre_json,
+            director_json, writer_json, actors_json,
+            data.get("runtime", ""),
+            data.get("poster_path", ""), data.get("fanart_path", ""), data.get("video_path", ""),
+            data.get("video_specs", ""), data.get("media_info", ""),
+            now, now,
+        ))
         movie_id = cursor.lastrowid
-
+        logger.info("新增电影: %s", data["title"])
     conn.commit()
     conn.close()
     return movie_id
 
 
 def update_movie_status(movie_id, field, value):
-    """
-    更新电影的布尔/整数状态字段。
-
-    Args:
-        movie_id: 电影 ID
-        field: 字段名（is_watched, is_favorite, play_progress）
-        value: 新值
-    """
     allowed_fields = {"is_watched", "is_favorite", "play_progress", "last_played_time"}
     if field not in allowed_fields:
         raise ValueError(f"不允许更新的字段: {field}")
-
     now = datetime.now().isoformat()
     conn = get_connection()
-
-    if field == "last_played_time":
-        conn.execute(
-            "UPDATE movies SET last_played_time = ?, updated_at = ? WHERE id = ?",
-            (value, now, movie_id),
-        )
-    else:
-        conn.execute(
-            f"UPDATE movies SET {field} = ?, updated_at = ? WHERE id = ?",
-            (value, now, movie_id),
-        )
+    conn.execute(
+        f"UPDATE movies SET {field} = ?, updated_at = ? WHERE id = ?",
+        (value, now, movie_id),
+    )
     conn.commit()
     conn.close()
 
 
 def mark_as_played(movie_id):
-    """标记电影为已播放，记录播放时间。"""
     now = datetime.now().isoformat()
     conn = get_connection()
     conn.execute(
@@ -288,55 +297,34 @@ def mark_as_played(movie_id):
 
 
 def toggle_watched(movie_id):
-    """切换已看/未看状态，返回切换后的新值。"""
     conn = get_connection()
-    row = conn.execute(
-        "SELECT is_watched FROM movies WHERE id = ?", (movie_id,)
-    ).fetchone()
+    row = conn.execute("SELECT is_watched FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if row is None:
         conn.close()
         return None
     new_val = 0 if row["is_watched"] else 1
     now = datetime.now().isoformat()
-    conn.execute(
-        "UPDATE movies SET is_watched = ?, updated_at = ? WHERE id = ?",
-        (new_val, now, movie_id),
-    )
+    conn.execute("UPDATE movies SET is_watched = ?, updated_at = ? WHERE id = ?", (new_val, now, movie_id))
     conn.commit()
     conn.close()
     return new_val
 
 
 def toggle_favorite(movie_id):
-    """切换收藏/取消收藏状态，返回切换后的新值。"""
     conn = get_connection()
-    row = conn.execute(
-        "SELECT is_favorite FROM movies WHERE id = ?", (movie_id,)
-    ).fetchone()
+    row = conn.execute("SELECT is_favorite FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if row is None:
         conn.close()
         return None
     new_val = 0 if row["is_favorite"] else 1
     now = datetime.now().isoformat()
-    conn.execute(
-        "UPDATE movies SET is_favorite = ?, updated_at = ? WHERE id = ?",
-        (new_val, now, movie_id),
-    )
+    conn.execute("UPDATE movies SET is_favorite = ?, updated_at = ? WHERE id = ?", (new_val, now, movie_id))
     conn.commit()
     conn.close()
     return new_val
 
 
 def delete_movie(movie_id):
-    """
-    根据 ID 删除单部电影记录。
-
-    Args:
-        movie_id: 电影 ID
-
-    Returns:
-        bool: 是否成功删除（记录存在并已删除返回 True）
-    """
     conn = get_connection()
     row = conn.execute("SELECT id FROM movies WHERE id = ?", (movie_id,)).fetchone()
     if row is None:
@@ -349,21 +337,292 @@ def delete_movie(movie_id):
 
 
 # =============================================================================
+# 电视剧 CRUD
+# =============================================================================
+
+def get_shows(sort_by="title", genre=None, favorite_only=False, search=None):
+    allowed_sort = {
+        "title": "title COLLATE NOCASE ASC",
+        "year": "year DESC",
+        "rating": "CAST(rating AS REAL) DESC",
+    }
+    order_clause = allowed_sort.get(sort_by, "title COLLATE NOCASE ASC")
+    conditions = []
+    params = []
+    if genre:
+        conditions.append("genre LIKE ?")
+        params.append(f"%{genre}%")
+    if favorite_only:
+        conditions.append("is_favorite = 1")
+    if search and search.strip():
+        kw = f"%{search.strip()}%"
+        conditions.append("(title LIKE ? OR original_title LIKE ? OR plot LIKE ?)")
+        params.extend([kw, kw, kw])
+    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+    conn = get_connection()
+    rows = conn.execute(
+        f"SELECT *, 'tvshow' AS media_type FROM shows {where_clause} ORDER BY {order_clause}",
+        params,
+    ).fetchall()
+    conn.close()
+    return [_deserialize_metadata(dict(row)) for row in rows]
+
+
+def get_show(show_id):
+    conn = get_connection()
+    row = conn.execute("SELECT *, 'tvshow' AS media_type FROM shows WHERE id = ?", (show_id,)).fetchone()
+    conn.close()
+    return _deserialize_metadata(dict(row)) if row else None
+
+
+def upsert_show(folder_path, data):
+    conn = get_connection()
+    now = datetime.now().isoformat()
+    actors_json = json.dumps(data.get("actors", []), ensure_ascii=True)
+    genre_json = _json_arr(data.get("genre", []))
+    director_json = _json_arr(data.get("director", []))
+    writer_json = _json_arr(data.get("writer", []))
+    existing = conn.execute("SELECT id FROM shows WHERE folder_path = ?", (folder_path,)).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE shows SET title=?, original_title=?, year=?, plot=?, rating=?, genre=?,
+            director=?, writer=?, actors=?, poster_path=?, fanart_path=?,
+            season_count=?, video_specs=?, updated_at=?
+            WHERE folder_path=?
+        """, (
+            data["title"], data.get("original_title", ""), data.get("year", ""),
+            data.get("plot", ""), data.get("rating", ""), genre_json,
+            director_json, writer_json, actors_json,
+            data.get("poster_path", ""), data.get("fanart_path", ""),
+            data.get("season_count", 0), data.get("video_specs", ""),
+            now, folder_path,
+        ))
+        show_id = existing["id"]
+    else:
+        cursor = conn.execute("""
+            INSERT INTO shows (folder_path, title, original_title, year, plot, rating,
+            genre, director, writer, actors, poster_path, fanart_path, season_count,
+            video_specs, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            folder_path, data["title"], data.get("original_title", ""), data.get("year", ""),
+            data.get("plot", ""), data.get("rating", ""), genre_json,
+            director_json, writer_json, actors_json,
+            data.get("poster_path", ""), data.get("fanart_path", ""),
+            data.get("season_count", 0), data.get("video_specs", ""),
+            now, now,
+        ))
+        show_id = cursor.lastrowid
+        logger.info("新增电视剧: %s", data["title"])
+    conn.commit()
+    conn.close()
+    return show_id
+
+
+def toggle_show_favorite(show_id):
+    conn = get_connection()
+    row = conn.execute("SELECT is_favorite FROM shows WHERE id = ?", (show_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    new_val = 0 if row["is_favorite"] else 1
+    now = datetime.now().isoformat()
+    conn.execute("UPDATE shows SET is_favorite = ?, updated_at = ? WHERE id = ?", (new_val, now, show_id))
+    conn.commit()
+    conn.close()
+    return new_val
+
+
+def delete_show(show_id):
+    conn = get_connection()
+    row = conn.execute("SELECT id FROM shows WHERE id = ?", (show_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return False
+    conn.execute("DELETE FROM episodes WHERE show_id = ?", (show_id,))
+    conn.execute("DELETE FROM shows WHERE id = ?", (show_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# =============================================================================
+# 单集 CRUD
+# =============================================================================
+
+def get_episodes(show_id, season=None):
+    conn = get_connection()
+    if season is not None:
+        rows = conn.execute(
+            "SELECT * FROM episodes WHERE show_id = ? AND season = ? ORDER BY episode",
+            (show_id, season),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM episodes WHERE show_id = ? ORDER BY season, episode",
+            (show_id,),
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_episode(episode_id):
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def upsert_episode(show_id, season, episode, data):
+    conn = get_connection()
+    now = datetime.now().isoformat()
+    existing = conn.execute(
+        "SELECT id FROM episodes WHERE show_id = ? AND season = ? AND episode = ?",
+        (show_id, season, episode),
+    ).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE episodes SET title=?, plot=?, rating=?, thumb_path=?, video_path=?,
+            media_info=?, updated_at=?
+            WHERE show_id=? AND season=? AND episode=?
+        """, (
+            data.get("title", ""), data.get("plot", ""), data.get("rating", ""),
+            data.get("thumb_path", ""), data.get("video_path", ""),
+            data.get("media_info", ""), now,
+            show_id, season, episode,
+        ))
+        ep_id = existing["id"]
+    else:
+        cursor = conn.execute("""
+            INSERT INTO episodes (show_id, season, episode, title, plot, rating,
+            thumb_path, video_path, media_info, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            show_id, season, episode,
+            data.get("title", ""), data.get("plot", ""), data.get("rating", ""),
+            data.get("thumb_path", ""), data.get("video_path", ""),
+            data.get("media_info", ""),
+            now, now,
+        ))
+        ep_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return ep_id
+
+
+def delete_stale_episodes(show_id, on_disk_keys):
+    """
+    删除磁盘上已不存在的单集记录（保留 is_watched 状态不会被误删）。
+    on_disk_keys: 扫描中发现的 (season, episode) 元组集合。
+    返回删除的行数。
+    """
+    conn = get_connection()
+    db_episodes = conn.execute(
+        "SELECT id, season, episode FROM episodes WHERE show_id = ?", (show_id,)
+    ).fetchall()
+    stale_ids = [
+        row["id"] for row in db_episodes
+        if (row["season"], row["episode"]) not in on_disk_keys
+    ]
+    for ep_id in stale_ids:
+        conn.execute("DELETE FROM episodes WHERE id = ?", (ep_id,))
+    conn.commit()
+    conn.close()
+    if stale_ids:
+        logger.info("清理过期单集 %d 条 (show_id=%s)", len(stale_ids), show_id)
+    return len(stale_ids)
+
+
+def toggle_episode_watched(episode_id):
+    conn = get_connection()
+    row = conn.execute("SELECT is_watched FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    new_val = 0 if row["is_watched"] else 1
+    now = datetime.now().isoformat()
+    conn.execute("UPDATE episodes SET is_watched = ?, updated_at = ? WHERE id = ?", (new_val, now, episode_id))
+    conn.commit()
+    conn.close()
+    return new_val
+
+
+def get_show_seasons(show_id):
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT DISTINCT season FROM episodes WHERE show_id = ? ORDER BY season", (show_id,)
+    ).fetchall()
+    conn.close()
+    return [row["season"] for row in rows]
+
+
+def mark_show_watched(show_id, watched):
+    """将电视剧所有单集标记为已看或未看。返回更新的集数。"""
+    now = datetime.now().isoformat()
+    conn = get_connection()
+    conn.execute(
+        "UPDATE episodes SET is_watched = ?, updated_at = ? WHERE show_id = ?",
+        (1 if watched else 0, now, show_id),
+    )
+    count = conn.execute("SELECT COUNT(*) FROM episodes WHERE show_id = ?", (show_id,)).fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
+
+
+def mark_season_watched(show_id, season, watched):
+    """将某季所有单集标记为已看或未看。返回更新的集数。"""
+    now = datetime.now().isoformat()
+    conn = get_connection()
+    conn.execute(
+        "UPDATE episodes SET is_watched = ?, updated_at = ? WHERE show_id = ? AND season = ?",
+        (1 if watched else 0, now, show_id, season),
+    )
+    count = conn.execute(
+        "SELECT COUNT(*) FROM episodes WHERE show_id = ? AND season = ?", (show_id, season)
+    ).fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
+
+
+def is_show_all_watched(show_id):
+    """检查电视剧是否全部已看。"""
+    conn = get_connection()
+    total = conn.execute("SELECT COUNT(*) FROM episodes WHERE show_id = ?", (show_id,)).fetchone()[0]
+    watched = conn.execute(
+        "SELECT COUNT(*) FROM episodes WHERE show_id = ? AND is_watched = 1", (show_id,)
+    ).fetchone()[0]
+    conn.close()
+    return total > 0 and total == watched
+
+
+# =============================================================================
+# 统一媒体查询（供侧边栏筛选使用）
+# =============================================================================
+
+def get_all_media(sort_by="title", genre=None, favorite_only=False, search=None):
+    movies = get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+    shows = get_shows(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+    combined = movies + shows
+    if sort_by == "title":
+        combined.sort(key=lambda x: x.get("title", "").lower())
+    elif sort_by == "year":
+        combined.sort(key=lambda x: x.get("year", ""), reverse=True)
+    elif sort_by == "rating":
+        combined.sort(key=lambda x: float(x.get("rating") or 0), reverse=True)
+    return combined
+
+
+# =============================================================================
 # 设置 CRUD
 # =============================================================================
 
-
 def get_settings():
-    """
-    获取所有设置项，返回为字典。
-
-    Returns:
-        dict: {key: parsed_value}，media_roots 会自动从 JSON 解析为 list
-    """
     conn = get_connection()
     rows = conn.execute("SELECT key, value FROM settings").fetchall()
     conn.close()
-
     settings = {}
     for row in rows:
         key, value = row["key"], row["value"]
@@ -378,11 +637,8 @@ def get_settings():
 
 
 def get_setting(key):
-    """获取单个设置项的值。"""
     conn = get_connection()
-    row = conn.execute(
-        "SELECT value FROM settings WHERE key = ?", (key,)
-    ).fetchone()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     conn.close()
     if row is None:
         return None
@@ -395,13 +651,6 @@ def get_setting(key):
 
 
 def update_setting(key, value):
-    """
-    更新设置项的值。
-
-    Args:
-        key: 设置项名称
-        value: 新值（media_roots 接受 list，会自动序列化）
-    """
     if key == "media_roots":
         value = json.dumps(value, ensure_ascii=True)
     conn = get_connection()
@@ -414,7 +663,6 @@ def update_setting(key, value):
 
 
 def add_media_root(path):
-    """向 media_roots 列表中添加一个路径（去重）。"""
     roots = get_setting("media_roots") or []
     if path not in roots:
         roots.append(path)
@@ -423,7 +671,6 @@ def add_media_root(path):
 
 
 def remove_media_root(path):
-    """从 media_roots 列表中移除一个路径。"""
     roots = get_setting("media_roots") or []
     if path in roots:
         roots.remove(path)
@@ -431,26 +678,26 @@ def remove_media_root(path):
     return roots
 
 
+# =============================================================================
+# 类型标签
+# =============================================================================
+
 def get_genres():
-    """
-    从数据库中提取所有不重复的类型标签。
-
-    genre 字段为逗号分隔的字符串（如 "动作, 科幻"），
-    此函数将其拆分、去重、排序后返回。
-
-    Returns:
-        list[str]: 排序后的独立类型列表
-    """
     conn = get_connection()
-    rows = conn.execute("SELECT genre FROM movies WHERE genre != ''").fetchall()
-    conn.close()
-
     genres = set()
-    for row in rows:
-        for g in row["genre"].split(","):
-            g = g.strip()
-            if g:
-                genres.add(g)
+    for table in ["movies", "shows"]:
+        rows = conn.execute(f"SELECT genre FROM {table} WHERE genre != '' AND genre != '[]'").fetchall()
+        for row in rows:
+            val = row["genre"]
+            try:
+                genre_list = json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                genre_list = [g.strip() for g in val.split(",") if g.strip()]
+            for g in genre_list:
+                g = g.strip()
+                if g:
+                    genres.add(g)
+    conn.close()
     return sorted(genres)
 
 
@@ -458,38 +705,55 @@ def get_genres():
 # 全量刷新辅助
 # =============================================================================
 
-
 def get_all_folder_paths():
-    """
-    获取数据库中所有电影记录的 folder_path 集合。
-
-    Returns:
-        set[str]: 所有已记录的文件夹绝对路径
-    """
     conn = get_connection()
     rows = conn.execute("SELECT folder_path FROM movies").fetchall()
+    movie_paths = {row["folder_path"] for row in rows}
+    rows = conn.execute("SELECT folder_path FROM shows").fetchall()
+    show_paths = {row["folder_path"] for row in rows}
+    conn.close()
+    return movie_paths | show_paths
+
+
+def get_all_show_paths():
+    conn = get_connection()
+    rows = conn.execute("SELECT folder_path FROM shows").fetchall()
     conn.close()
     return {row["folder_path"] for row in rows}
 
 
-def delete_stale_movies(on_disk_paths):
-    """
-    删除数据库中存在于磁盘上已不存在的电影记录（全量刷新时使用）。
-
-    Args:
-        on_disk_paths: set[str] — 当前磁盘上所有包含视频的文件夹绝对路径
-
-    Returns:
-        int: 被删除的记录数
-    """
-    db_paths = get_all_folder_paths()
-    stale = db_paths - on_disk_paths
-    if not stale:
-        return 0
-
+def reset_all_media():
+    """清空所有电影、电视剧、单集记录（保留设置）。"""
     conn = get_connection()
-    for path in stale:
-        conn.execute("DELETE FROM movies WHERE folder_path = ?", (path,))
+    conn.execute("DELETE FROM episodes")
+    conn.execute("DELETE FROM movies")
+    conn.execute("DELETE FROM shows")
     conn.commit()
     conn.close()
-    return len(stale)
+    logger.info("已清空所有媒体记录")
+
+
+def delete_stale_media(on_disk_movie_paths, on_disk_show_paths):
+    conn = get_connection()
+    deleted = 0
+
+    db_movies = {row["folder_path"] for row in conn.execute("SELECT folder_path FROM movies").fetchall()}
+    stale_movies = db_movies - on_disk_movie_paths
+    for path in stale_movies:
+        conn.execute("DELETE FROM movies WHERE folder_path = ?", (path,))
+        deleted += 1
+
+    db_shows = {row["folder_path"] for row in conn.execute("SELECT folder_path FROM shows").fetchall()}
+    stale_shows = db_shows - on_disk_show_paths
+    for path in stale_shows:
+        show = conn.execute("SELECT id FROM shows WHERE folder_path = ?", (path,)).fetchone()
+        if show:
+            conn.execute("DELETE FROM episodes WHERE show_id = ?", (show["id"],))
+            conn.execute("DELETE FROM shows WHERE folder_path = ?", (path,))
+            deleted += 1
+
+    conn.commit()
+    conn.close()
+    if deleted > 0:
+        logger.info("清理过期记录: %d 条", deleted)
+    return deleted

@@ -8,6 +8,9 @@
 </head>
 <body>
 
+    <!-- 全视口背景层 — fanart 覆盖整个页面包括侧边栏和顶栏后方 -->
+    <div id="bg-layer"></div>
+
     <!-- ================================================================ -->
     <!-- 顶部导航栏                                                        -->
     <!-- ================================================================ -->
@@ -18,86 +21,118 @@
         </div>
         <nav class="nav-tabs">
             <button class="nav-tab active" data-view="home">海报墙</button>
+            <button class="nav-tab nav-fav" id="btn-nav-fav" data-active="false" title="收藏筛选">&#9825;</button>
             <button class="nav-tab" data-view="settings" title="设置">&#9881;</button>
         </nav>
     </header>
 
     <!-- ================================================================ -->
-    <!-- 主内容区                                                          -->
+    <!-- 布局容器：侧边栏 + 主内容                                         -->
     <!-- ================================================================ -->
-    <main id="main-content">
+    <div id="app-layout">
 
-        <!-- ─── 海报墙视图 ─── -->
-        <section id="view-home" class="view active">
-            <!-- 排序与筛选工具栏 -->
-            <div id="toolbar">
-                <div class="toolbar-left">
-                    <select id="sort-select">
-                        <option value="title">按标题排序</option>
-                        <option value="year">按年份排序</option>
-                        <option value="rating">按评分排序</option>
-                    </select>
-                    <select id="genre-select">
-                        <option value="">全部类型</option>
-                    </select>
-                    <button id="btn-rescan" class="btn-rescan" title="重新扫描全部媒体库，清理已删除的电影">&#8635; 重新扫描</button>
+        <!-- ─── 左侧边栏筛选 ─── -->
+        <aside id="sidebar">
+            <button class="sidebar-toggle" id="sidebar-toggle" title="收起侧边栏">&#9664;</button>
+            <nav class="sidebar-nav">
+                <button class="sidebar-btn active" data-filter="all">
+                    <span class="sidebar-icon">&#127910;</span> 全部
+                </button>
+                <button class="sidebar-btn" data-filter="movie">
+                    <span class="sidebar-icon">&#127909;</span> 电影
+                </button>
+                <button class="sidebar-btn" data-filter="tvshow">
+                    <span class="sidebar-icon">&#128250;</span> 电视剧
+                </button>
+                <button class="sidebar-btn sidebar-fav" id="btn-sidebar-fav" data-filter="favorite">
+                    <span class="sidebar-icon">&#9825;</span> 收藏
+                </button>
+            </nav>
+        </aside>
+
+        <!-- ─── 主内容区 ─── -->
+        <main id="main-content">
+
+            <!-- ─── 海报墙视图 ─── -->
+            <section id="view-home" class="view active">
+                <div id="toolbar">
+                    <div class="toolbar-left">
+                        <select id="sort-select">
+                            <option value="title">按标题排序</option>
+                            <option value="year">按年份排序</option>
+                            <option value="rating">按评分排序</option>
+                        </select>
+                        <select id="genre-select">
+                            <option value="">全部类型</option>
+                        </select>
+                        <div class="search-box">
+                            <input type="text" id="search-input" placeholder="搜索标题、原名或简介...">
+                            <button id="btn-search-clear" class="btn-search-clear" title="清除搜索">&times;</button>
+                        </div>
+                        <button id="btn-rescan" class="btn-rescan" title="重新扫描全部媒体库，清理已删除的记录">&#8635; 重新扫描</button>
+                    </div>
+                    <div class="toolbar-right">
+                        <span id="media-count">共 0 部</span>
+                    </div>
                 </div>
-                <div class="toolbar-right">
-                    <span id="movie-count">共 0 部</span>
-                </div>
-            </div>
 
-            <!-- 扫描反馈提示条 -->
-            <div id="scan-toast" class="scan-toast hidden"></div>
+                <div id="scan-toast" class="scan-toast hidden"></div>
 
-            <!-- 海报网格容器 -->
-            <div id="poster-grid" class="poster-grid">
-                <!-- JS 动态填充 -->
-            </div>
-        </section>
-
-        <!-- ─── 详情视图 ─── -->
-        <section id="view-detail" class="view">
-            <button id="btn-back" class="btn-back">&#8592; 返回海报墙</button>
-            <div id="detail-container">
-                <!-- JS 动态填充 -->
-            </div>
-        </section>
-
-        <!-- ─── 设置视图 ─── -->
-        <section id="view-settings" class="view">
-            <h2>设置</h2>
-
-            <!-- 媒体库根目录管理 -->
-            <div class="settings-section">
-                <h3>媒体库根目录</h3>
-                <ul id="media-roots-list">
+                <div id="poster-grid" class="poster-grid">
                     <!-- JS 动态填充 -->
-                </ul>
-                <div class="add-root-row">
-                    <input type="text" id="input-media-root" placeholder="输入媒体库根目录路径，如 F:\媒体库\电影">
-                    <button id="btn-add-root">添加</button>
                 </div>
-            </div>
+            </section>
 
-            <!-- 播放器路径设置 -->
-            <div class="settings-section">
-                <h3>外部播放器</h3>
-                <input type="text" id="input-player-path" placeholder="播放器可执行文件路径">
-                <button id="btn-save-player">保存</button>
-            </div>
-
-            <!-- 扫描控制 -->
-            <div class="settings-section">
-                <h3>媒体库扫描</h3>
-                <button id="btn-scan" class="btn-primary">立即扫描</button>
-                <div id="scan-log">
-                    <!-- 扫描日志输出 -->
+            <!-- ─── 电影详情视图 ─── -->
+            <section id="view-detail" class="view">
+                <button id="btn-back" class="btn-back">&#8592; 返回海报墙</button>
+                <div id="detail-container">
+                    <!-- JS 动态填充 -->
                 </div>
-            </div>
-        </section>
+            </section>
 
-    </main>
+            <!-- ─── 电视剧详情视图 ─── -->
+            <section id="view-tvshow" class="view">
+                <button id="btn-tv-back" class="btn-back">&#8592; 返回海报墙</button>
+                <div id="tvshow-container">
+                    <!-- JS 动态填充 -->
+                </div>
+            </section>
+
+            <!-- ─── 设置视图 ─── -->
+            <section id="view-settings" class="view">
+                <h2>设置</h2>
+
+                <div class="settings-section">
+                    <h3>媒体库根目录</h3>
+                    <ul id="media-roots-list">
+                        <!-- JS 动态填充 -->
+                    </ul>
+                    <div class="add-root-row">
+                        <input type="text" id="input-media-root" placeholder="输入媒体库根目录路径，如 F:\媒体库\电影">
+                        <button id="btn-browse-folder" class="btn-browse">浏览...</button>
+                        <button id="btn-add-root">添加</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>外部播放器</h3>
+                    <input type="text" id="input-player-path" placeholder="播放器可执行文件路径">
+                    <button id="btn-save-player">保存</button>
+                </div>
+
+                <div class="settings-section">
+                    <h3>媒体库扫描</h3>
+                    <button id="btn-scan" class="btn-primary">立即扫描</button>
+                    <button id="btn-scan-incr" class="btn-primary btn-scan-incr">扫描新增</button>
+                    <div id="scan-log">
+                        <!-- 扫描日志输出 -->
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
 
     <!-- ================================================================ -->
     <!-- 脚本                                                              -->

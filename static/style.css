@@ -38,6 +38,134 @@ body {
 }
 
 /* =========================================================================
+   全视口背景层 — fanart 显示在侧边栏和顶栏后方
+   ========================================================================= */
+
+#bg-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    background-color: var(--bg-primary);
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    transition: background-image 0.6s ease;
+    pointer-events: none;
+}
+
+/* =========================================================================
+   布局：侧边栏 + 主内容
+   ========================================================================= */
+
+#app-layout {
+    display: flex;
+    min-height: calc(100vh - 64px);
+}
+
+/* =========================================================================
+   左侧边栏
+   ========================================================================= */
+
+#sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background-color: rgba(0,0,0,0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 44px 0 20px;
+    position: sticky;
+    top: 64px;
+    height: calc(100vh - 64px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 90;
+    transition: width 0.25s ease;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    z-index: 5;
+    padding: 0;
+}
+.sidebar-toggle:hover { color: #fff; background: rgba(255,255,255,0.12); }
+
+/* 侧边栏收起状态 */
+#sidebar.collapsed {
+    width: 64px;
+}
+#sidebar.collapsed .sidebar-btn {
+    justify-content: center;
+    padding: 10px 8px;
+}
+#sidebar.collapsed .sidebar-btn span:not(.sidebar-icon) {
+    display: none;
+}
+#sidebar.collapsed .sidebar-icon {
+    font-size: 18px;
+    width: auto;
+}
+#sidebar.collapsed .sidebar-toggle {
+    right: 50%;
+    transform: translateX(50%);
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 8px;
+}
+
+.sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: var(--transition);
+    text-align: left;
+    width: 100%;
+}
+.sidebar-btn:hover { color: #ddd; background-color: rgba(255,255,255,0.04); }
+.sidebar-btn.active {
+    color: #fff;
+    background-color: rgba(255,255,255,0.08);
+}
+
+.sidebar-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+
+.sidebar-fav.active { color: var(--accent); }
+
+#main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* =========================================================================
    顶部导航栏 — Emby style: 左侧标题，右侧设置图标
    ========================================================================= */
 
@@ -47,10 +175,10 @@ body {
     justify-content: space-between;
     padding: 0 28px;
     height: 64px;
-    background-color: rgba(10, 10, 10, 0.92);
+    background-color: rgba(0,0,0,0.55);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -86,6 +214,17 @@ body {
     padding: 8px 12px;
     line-height: 1;
 }
+
+/* 收藏筛选按钮 */
+.nav-fav {
+    font-size: 18px;
+    padding: 8px 12px;
+    line-height: 1;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+.nav-fav:hover { color: var(--accent); }
+.nav-fav.active { color: var(--accent); }
 
 /* =========================================================================
    视图切换
@@ -136,7 +275,42 @@ body {
 
 .toolbar-right { display: flex; align-items: center; gap: 14px; }
 
-#movie-count {
+/* 搜索框 */
+.search-box {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.search-box input {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 8px 30px 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 220px;
+    outline: none;
+    transition: var(--transition);
+}
+.search-box input:focus { border-color: var(--accent); }
+.search-box input::placeholder { color: #666; }
+
+.btn-search-clear {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: none;
+    line-height: 1;
+}
+.btn-search-clear:hover { color: #fff; }
+
+#media-count {
     color: var(--text-secondary);
     font-size: 13px;
     white-space: nowrap;
@@ -172,8 +346,12 @@ body {
 .toast-error  { background-color: #241212; color: #e07e7e; border: 1px solid #3e1e1e; }
 
 /* =========================================================================
-   海报网格 — 响应式列数
+   海报墙视图 — fanart 动态背景（渐变叠加在 inline background-image 中）
    ========================================================================= */
+
+#view-home {
+    min-height: calc(100vh - 64px);
+}
 
 .poster-grid {
     display: grid;
@@ -249,10 +427,11 @@ body {
     color: #444;
 }
 
-/* 卡片信息区 — 文字居中 */
+/* 卡片信息区 — 文字居中，宽度与海报图片一致 */
 .card-info {
-    padding: 10px 10px 12px;
+    padding: 8px 8px 10px;
     text-align: center;
+    background: rgba(0, 0, 0, 0.75);
 }
 
 /* 标题 — 最多两行，溢出省略，居中 */
@@ -271,7 +450,7 @@ body {
 .card-year {
     font-size: 11px;
     color: var(--text-secondary);
-    margin-top: 4px;
+    margin-top: 3px;
 }
 
 /* 角标 */
@@ -297,12 +476,12 @@ body {
 
 #view-detail {
     min-height: calc(100vh - 64px);
-    background-color: var(--bg-primary);
     position: relative;
 }
 
-#view-detail.has-fanart {
-    /* background-image / background-size 等由 JS 动态设置 */
+#view-tvshow {
+    min-height: calc(100vh - 64px);
+    position: relative;
 }
 
 .btn-back {
@@ -318,12 +497,17 @@ body {
 .btn-back:hover { color: #fff; }
 
 #detail-container {
-    max-width: 940px;
+    max-width: 95vw;
     margin: 0 auto;
-    padding: 0 28px 60px;
+    padding: 0 20px 60px;
 }
 
-.detail-header { display: flex; gap: 36px; margin-bottom: 32px; }
+.detail-header {
+    display: flex;
+    gap: 36px;
+    margin-bottom: 32px;
+    align-items: flex-start;
+}
 
 .detail-poster {
     width: 300px;
@@ -331,51 +515,208 @@ body {
     border-radius: var(--radius);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     flex-shrink: 0;
-    aspect-ratio: 2/3;
-    object-fit: cover;
+    height: auto;
+    display: block;
 }
 
-.detail-meta { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail-meta { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
 
 .detail-title {
-    font-size: 28px;
+    font-size: 36px;
     font-weight: 700;
-    line-height: 1.25;
+    line-height: 1.2;
     color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6);
 }
-.detail-original-title { font-size: 15px; color: var(--text-secondary); }
-.detail-year { font-size: 15px; color: var(--text-secondary); }
-.detail-rating { font-size: 18px; color: var(--gold); font-weight: 600; }
+.detail-original-title { font-size: 19px; color: var(--text-secondary); text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+.detail-year { font-size: 19px; color: var(--text-secondary); text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+.detail-rating { font-size: 24px; color: var(--gold); font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+
+/* 上部信息区域（海报右侧，无毛玻璃） */
+.detail-top {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.detail-year-rating {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 17px;
+    color: #ccc;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    flex-wrap: wrap;
+}
+.detail-year-rating .sep { color: var(--text-secondary); }
 
 /* 元数据行：导演 / 编剧 / 主演 / 类型 / 时长 */
 .detail-meta-lines {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    margin: 6px 0;
-    padding: 10px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 6px;
+    margin: 0;
 }
 .detail-meta-line {
-    font-size: 13px;
+    font-size: 17px;
     color: var(--text-primary);
     line-height: 1.7;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
 }
 .meta-label {
     color: var(--text-secondary);
-    margin-right: 6px;
+    margin-right: 8px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    font-weight: 500;
 }
+
+/* 元数据气泡标签 */
+.chip-line { display: flex; align-items: flex-start; gap: 8px; }
+.chip-tag-container { display: inline-flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.chip-tag {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 13px;
+    color: #ddd;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    transition: background 0.15s ease;
+}
+.chip-tag:hover { background: rgba(255,255,255,0.22); }
+.chip-role { color: var(--text-secondary); font-size: 11px; margin-left: 2px; }
+.chip-role::before { content: "·"; margin-right: 3px; }
 
 .detail-plot {
-    font-size: 14px;
+    font-size: 18px;
     line-height: 1.8;
     color: #ccc;
-    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
 }
 
+/* 剧情简介区块 — 占满容器宽度 */
+.detail-plot-section {
+    margin-top: 28px;
+}
+.detail-plot-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 12px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.detail-plot-text {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.85;
+    color: #ddd;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    display: -webkit-box;
+    -webkit-line-clamp: 8;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+.detail-plot-text.expanded {
+    -webkit-line-clamp: unset;
+    display: block;
+}
+.btn-plot-expand {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-top: 6px;
+    transition: var(--transition);
+}
+.btn-plot-expand:hover { color: var(--accent-hover); }
+
+/* 技术信息三列网格 */
+.detail-tech-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 28px;
+}
+.tech-card {
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+.tech-card h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #aaa;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.tech-card table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.tech-card td {
+    padding: 3px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    vertical-align: top;
+}
+.tech-card td.tech-label {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    padding-right: 10px;
+    font-weight: 400;
+    width: 40%;
+}
+.tech-card td.tech-value {
+    color: #ddd;
+    font-weight: 400;
+    word-break: break-all;
+}
+
+/* 文件信息 */
+.detail-file-info {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.04);
+}
+.detail-file-info p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    word-break: break-all;
+    line-height: 1.7;
+}
+.detail-file-info strong {
+    color: #ccc;
+    font-weight: 500;
+}
+
+/* 视频规格标签 */
+.detail-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.detail-tag {
+    display: inline-block;
+    padding: 3px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.6;
+}
+.tag-resolution { background: rgba(74, 158, 255, 0.2); color: #6db3ff; border: 1px solid rgba(74, 158, 255, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tag-video_codec { background: rgba(74, 158, 255, 0.2); color: #6db3ff; border: 1px solid rgba(74, 158, 255, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tag-hdr { background: rgba(240, 192, 64, 0.2); color: #f5d060; border: 1px solid rgba(240, 192, 64, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tag-audio { background: rgba(76, 175, 80, 0.2); color: #81c784; border: 1px solid rgba(76, 175, 80, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.tag-source { background: rgba(156, 39, 176, 0.2); color: #ce93d8; border: 1px solid rgba(156, 39, 176, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+
 /* 操作按钮 */
-.detail-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.detail-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 .btn-play {
     background-color: var(--accent);
@@ -383,7 +724,7 @@ body {
     border: none;
     padding: 12px 36px;
     border-radius: 8px;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
@@ -391,22 +732,270 @@ body {
 }
 .btn-play:hover { background-color: var(--accent-hover); }
 
-.btn-icon {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #ccc;
+/* 圆形图标操作按钮 */
+.btn-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    color: #999;
+}
+.btn-icon-action:hover {
+    background: rgba(255,255,255,0.16);
+    border-color: rgba(255,255,255,0.25);
+    color: #fff;
+}
+.btn-icon-action.active {
+    background: rgba(76,175,80,0.18);
+    border-color: rgba(76,175,80,0.3);
+}
+.btn-icon-action.favorited {
+    background: rgba(233,69,96,0.14);
+    border-color: rgba(233,69,96,0.3);
+}
+.btn-icon-action.btn-delete:hover {
+    background: rgba(233,69,96,0.18);
+    border-color: rgba(233,69,96,0.35);
+}
+
+/* =========================================================================
+   电视剧详情 — 季标签 + 单集列表
+   ========================================================================= */
+
+#tvshow-container {
+    max-width: 95vw;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+}
+
+/* 季标签栏 */
+.tv-seasons {
+    margin-top: 28px;
+}
+
+.season-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.season-tab {
+    background-color: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
     border: 1px solid transparent;
-    padding: 12px 16px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: var(--transition);
+}
+.season-tab:hover { color: #ddd; background-color: rgba(255,255,255,0.1); }
+.season-tab.active {
+    color: #fff;
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* 单集列表 — 横向滚动卡片 */
+.episode-list {
+    /* container for ep-scroll */
+}
+
+.ep-scroll {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 4px 16px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+.ep-scroll::-webkit-scrollbar { height: 6px; }
+.ep-scroll::-webkit-scrollbar-track { background: transparent; }
+.ep-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.ep-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+.ep-card {
+    flex: 0 0 auto;
+    width: 250px;
+    background-color: rgba(255,255,255,0.04);
     border-radius: 8px;
-    font-size: 18px;
+    overflow: hidden;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    cursor: pointer;
+}
+.ep-card:hover {
+    background-color: rgba(255,255,255,0.08);
+    transform: translateY(-2px);
+}
+.ep-card.ep-watched { opacity: 0.55; }
+.ep-card.ep-watched:hover { opacity: 0.8; }
+
+.ep-card-thumb-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-color: #161616;
+    overflow: hidden;
+}
+
+.ep-card-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.ep-card-thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #444;
+}
+
+.ep-card-play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: rgba(255,255,255,0);
+    background: rgba(0,0,0,0);
+    transition: all 0.2s ease;
+}
+.ep-card:hover .ep-card-play-overlay {
+    color: rgba(255,255,255,0.9);
+    background: rgba(0,0,0,0.35);
+}
+
+.ep-card-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ep-card-id {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.06);
+    padding: 2px 8px;
+    border-radius: 3px;
+    align-self: flex-start;
+}
+
+.ep-card-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.ep-card-plot {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+/* 已看圆形角标 */
+.ep-card-watched-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.ep-card-watched-badge::after {
+    content: "✓";
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.ep-card-watched-badge:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.4);
+}
+.ep-card-watched-badge.watched {
+    background: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 0 6px rgba(76,175,80,0.4);
+}
+.ep-card-watched-badge.watched::after { opacity: 1; }
+
+/* 每季已看按钮 */
+
+.season-tab-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.season-watched-btn {
+    background: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+    font-size: 14px;
     cursor: pointer;
     transition: var(--transition);
     line-height: 1;
 }
-.btn-icon:hover { background-color: rgba(255, 255, 255, 0.14); color: #fff; }
-.btn-icon.active { color: var(--accent); }
-.btn-icon.favorited { color: var(--gold); }
-.btn-icon.btn-delete { color: #777; }
-.btn-icon.btn-delete:hover { color: var(--accent); background-color: rgba(233, 69, 96, 0.15); }
+.season-watched-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.season-watched-btn.all-watched {
+    color: var(--green);
+    background: rgba(76,175,80,0.12);
+}
+.season-tab-group .season-tab {
+    border-radius: 6px 0 0 6px;
+}
+
+/* 电视剧角标 */
+.badge-tv {
+    position: absolute;
+    left: 8px;
+    top: 34px;
+    background-color: #3a7bd5;
+    color: #fff;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    z-index: 2;
+}
 
 /* =========================================================================
    设置页
@@ -493,11 +1082,35 @@ body {
 .add-root-row input { flex: 1; margin-bottom: 0 !important; }
 .add-root-row button { flex-shrink: 0; white-space: nowrap; }
 
+.btn-browse {
+    background-color: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.btn-browse:hover { background-color: rgba(255,255,255,0.14); }
+
 .btn-primary {
     background-color: var(--accent) !important;
     font-size: 15px !important;
     padding: 12px 32px !important;
     font-weight: 600 !important;
+}
+
+.btn-scan-incr {
+    margin-left: 10px;
+    background-color: #3a7bd5 !important;
+}
+.btn-scan-incr:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 #scan-log {
@@ -574,6 +1187,12 @@ body {
    ========================================================================= */
 
 @media (max-width: 1024px) {
+    #sidebar {
+        width: 170px;
+    }
+    #sidebar.collapsed {
+        width: 56px;
+    }
     .poster-grid {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 14px;
@@ -581,8 +1200,10 @@ body {
     }
     #toolbar { padding: 16px 20px; }
     .detail-header { gap: 24px; }
-    .detail-poster { width: 240px; }
-    .detail-title { font-size: 24px; }
+    .detail-poster { width: 260px; }
+    .detail-title { font-size: 30px; }
+    .detail-tech-grid { grid-template-columns: repeat(2, 1fr); }
+    .ep-thumb-wrapper { width: 100px; height: 56px; }
 }
 
 /* =========================================================================
@@ -590,6 +1211,37 @@ body {
    ========================================================================= */
 
 @media (max-width: 768px) {
+    #app-layout { flex-direction: column; }
+    #sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        padding: 8px 0;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        overflow-y: visible;
+        transition: none;
+    }
+    #sidebar.collapsed {
+        width: 100%;
+    }
+    #sidebar.collapsed .sidebar-btn span:not(.sidebar-icon) {
+        display: inline;
+    }
+    .sidebar-toggle { display: none; }
+    .sidebar-nav {
+        flex-direction: row;
+        padding: 0 12px;
+        gap: 4px;
+    }
+    .sidebar-btn {
+        padding: 7px 12px;
+        font-size: 13px;
+        border-radius: 6px;
+        white-space: nowrap;
+    }
+    .sidebar-icon { font-size: 14px; width: auto; }
+
     #top-nav { padding: 0 16px; height: 56px; }
     .nav-brand h1 { font-size: 16px; }
 
@@ -603,17 +1255,20 @@ body {
     #toolbar select { font-size: 12px; padding: 7px 12px; }
 
     .detail-header { flex-direction: column; align-items: flex-start; gap: 20px; }
-    .detail-poster { width: 180px; }
-    .detail-title { font-size: 22px; }
-    .detail-meta { gap: 6px; }
-    .detail-plot { font-size: 13px; }
+    .detail-poster { width: 200px; }
+    .detail-title { font-size: 26px; }
+    .detail-meta { gap: 8px; }
+    .detail-plot { font-size: 15px; }
 
     #view-settings { padding: 18px 16px 40px; }
+    #tvshow-container { padding: 0 16px 40px; }
     .settings-section { padding: 16px; }
     .add-root-row { flex-direction: column; }
     .add-root-row button { width: 100%; }
 
     .scan-toast { margin: 0 16px 8px; }
+    .ep-thumb-wrapper { width: 90px; height: 50px; }
+    .ep-title { font-size: 14px; }
 }
 
 /* =========================================================================
@@ -625,6 +1280,9 @@ body {
     .nav-brand h1 { font-size: 15px; }
     .nav-brand { gap: 4px; }
     .nav-logo { font-size: 18px; }
+
+    .sidebar-btn { padding: 6px 10px; font-size: 12px; }
+    .sidebar-icon { font-size: 13px; }
 
     .poster-grid {
         grid-template-columns: repeat(3, 1fr);
@@ -642,9 +1300,10 @@ body {
     .card-title { font-size: 11px; }
     .card-year { font-size: 10px; }
 
-    .detail-poster { width: 140px; }
-    .detail-title { font-size: 18px; }
+    .detail-poster { width: 160px; }
+    .detail-title { font-size: 22px; }
     .detail-actions { flex-direction: column; }
+    .detail-tech-grid { grid-template-columns: 1fr; }
     .btn-play, .btn-icon { width: 100%; text-align: center; }
 
     #view-settings h2 { font-size: 19px; }
@@ -653,4 +1312,9 @@ body {
     .settings-section button { font-size: 13px; padding: 8px 16px; }
 
     .scan-toast { margin: 0 10px 8px; font-size: 12px; }
+
+    .season-tab { padding: 6px 14px; font-size: 12px; }
+    .ep-thumb-wrapper { display: none; }
+    .ep-title { font-size: 13px; }
+    .ep-plot { font-size: 12px; }
 }

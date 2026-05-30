@@ -1,0 +1,40 @@
+2026-05-30 19:09:56 [ERROR] app: Exception on /api/all_media [GET]
+Traceback (most recent call last):
+  File "D:\project\localplayer\database.py", line 156, in _deserialize_metadata
+    row[field] = json.loads(val)
+                 ~~~~~~~~~~^^^^^
+  File "D:\code\miniconda3\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "D:\code\miniconda3\Lib\json\decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\code\miniconda3\Lib\json\decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\code\miniconda3\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "D:\code\miniconda3\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "D:\code\miniconda3\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "D:\code\miniconda3\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "D:\project\localplayer\app.py", line 513, in api_get_all_media
+    all_items = database.get_all_media(
+        sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search
+    )
+  File "D:\project\localplayer\database.py", line 589, in get_all_media
+    movies = get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+  File "D:\project\localplayer\database.py", line 198, in get_movies
+    return [_deserialize_metadata(dict(row)) for row in rows]
+            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "D:\project\localplayer\database.py", line 158, in _deserialize_metadata
+    row[field] = [g.strip() for g in re.split(r'[,/]', val) if g.strip()]
+                                     ^^
+NameError: name 're' is not defined. Did you forget to import 're'?

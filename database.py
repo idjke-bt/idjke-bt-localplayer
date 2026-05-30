@@ -12,7 +12,13 @@ from datetime import datetime
 
 logger = logging.getLogger("database")
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "localplayer.db")
+try:
+    from config import DB_PATH as _CFG_DB_PATH, DEFAULT_PLAYER_PATH as _CFG_DEFAULT_PLAYER_PATH
+except ImportError:
+    _CFG_DB_PATH = None
+    _CFG_DEFAULT_PLAYER_PATH = None
+
+DB_PATH = _CFG_DB_PATH or os.path.join(os.path.dirname(os.path.abspath(__file__)), "localplayer.db")
 
 
 def get_connection():
@@ -135,7 +141,7 @@ def init_db():
 
     defaults = {
         "media_roots": json.dumps([], ensure_ascii=True),
-        "player_path": r"D:\tools\mpv-lazy\mpv-lazy.exe",
+        "player_path": _CFG_DEFAULT_PLAYER_PATH or r"D:\tools\mpv-lazy\mpv-lazy.exe",
     }
     for key, value in defaults.items():
         cursor.execute(
@@ -183,7 +189,7 @@ def _deserialize_metadata(row):
         row["actors"] = []
     return row
 
-def get_movies(sort_by="title", genre=None, favorite_only=False, search=None):
+def get_movies(sort_by="title", genre=None, favorite_only=False, search=None, watched=None):
     allowed_sort = {
         "title": "title COLLATE NOCASE ASC",
         "year": "year DESC",
@@ -201,6 +207,9 @@ def get_movies(sort_by="title", genre=None, favorite_only=False, search=None):
         kw = f"%{search.strip()}%"
         conditions.append("(title LIKE ? OR original_title LIKE ? OR plot LIKE ?)")
         params.extend([kw, kw, kw])
+    if watched is not None:
+        conditions.append("is_watched = ?")
+        params.append(1 if watched else 0)
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     conn = get_connection()
@@ -340,7 +349,7 @@ def delete_movie(movie_id):
 # 电视剧 CRUD
 # =============================================================================
 
-def get_shows(sort_by="title", genre=None, favorite_only=False, search=None):
+def get_shows(sort_by="title", genre=None, favorite_only=False, search=None, watched=None):
     allowed_sort = {
         "title": "title COLLATE NOCASE ASC",
         "year": "year DESC",
@@ -358,6 +367,20 @@ def get_shows(sort_by="title", genre=None, favorite_only=False, search=None):
         kw = f"%{search.strip()}%"
         conditions.append("(title LIKE ? OR original_title LIKE ? OR plot LIKE ?)")
         params.extend([kw, kw, kw])
+    if watched is True:
+        conditions.append("""
+            id IN (
+                SELECT show_id FROM episodes
+                GROUP BY show_id HAVING COUNT(*) > 0 AND COUNT(*) = SUM(is_watched)
+            )
+        """)
+    elif watched is False:
+        conditions.append("""
+            id NOT IN (
+                SELECT show_id FROM episodes
+                GROUP BY show_id HAVING COUNT(*) > 0 AND COUNT(*) = SUM(is_watched)
+            )
+        """)
     where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     conn = get_connection()
@@ -602,9 +625,9 @@ def is_show_all_watched(show_id):
 # 统一媒体查询（供侧边栏筛选使用）
 # =============================================================================
 
-def get_all_media(sort_by="title", genre=None, favorite_only=False, search=None):
-    movies = get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
-    shows = get_shows(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+def get_all_media(sort_by="title", genre=None, favorite_only=False, search=None, watched=None):
+    movies = get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search, watched=watched)
+    shows = get_shows(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search, watched=watched)
     combined = movies + shows
     if sort_by == "title":
         combined.sort(key=lambda x: x.get("title", "").lower())

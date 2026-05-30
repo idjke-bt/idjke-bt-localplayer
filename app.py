@@ -20,10 +20,29 @@ import database
 import scanner
 
 # ---------------------------------------------------------------------------
+# 配置加载
+# ---------------------------------------------------------------------------
+
+try:
+    from config import (
+        LOG_DIR as _CFG_LOG_DIR,
+        FLASK_HOST as _CFG_FLASK_HOST,
+        FLASK_PORT as _CFG_FLASK_PORT,
+        PLAYER_CANDIDATES as _CFG_PLAYER_CANDIDATES,
+        DEFAULT_PLAYER_PATH as _CFG_DEFAULT_PLAYER_PATH,
+    )
+except ImportError:
+    _CFG_LOG_DIR = None
+    _CFG_FLASK_HOST = "127.0.0.1"
+    _CFG_FLASK_PORT = 5000
+    _CFG_PLAYER_CANDIDATES = None
+    _CFG_DEFAULT_PLAYER_PATH = None
+
+# ---------------------------------------------------------------------------
 # 日志系统
 # ---------------------------------------------------------------------------
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+LOG_DIR = _CFG_LOG_DIR or os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(
@@ -201,7 +220,7 @@ def serve_thumb_by_id(episode_id):
 # ===========================================================================
 
 # 常见播放器安装路径（按优先级排列）
-PLAYER_CANDIDATES = [
+PLAYER_CANDIDATES = _CFG_PLAYER_CANDIDATES or [
     r"D:\tools\mpv-lazy\mpv-lazy.exe",
     r"C:\tools\mpv-lazy\mpv-lazy.exe",
     r"C:\Program Files\mpv\mpv.exe",
@@ -256,7 +275,10 @@ def api_get_movies():
     genre = request.args.get("genre", None)
     favorite_only = request.args.get("favorite", "").lower() == "true"
     search = request.args.get("search", None)
-    movies = database.get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+    watched = request.args.get("watched", None)
+    if watched is not None:
+        watched = watched.lower() == "true"
+    movies = database.get_movies(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search, watched=watched)
     return jsonify({"movies": movies, "count": len(movies)})
 
 
@@ -346,13 +368,16 @@ def api_delete_movie(movie_id):
 def api_get_shows():
     """
     获取所有电视剧列表。
-    Query: sort=title|year|rating, genre=类型筛选, favorite=true|false, search=关键字
+    Query: sort=title|year|rating, genre=类型筛选, favorite=true|false, search=关键字, watched=true|false
     """
     sort_by = request.args.get("sort", "title")
     genre = request.args.get("genre", None)
     favorite_only = request.args.get("favorite", "").lower() == "true"
     search = request.args.get("search", None)
-    shows = database.get_shows(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search)
+    watched = request.args.get("watched", None)
+    if watched is not None:
+        watched = watched.lower() == "true"
+    shows = database.get_shows(sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search, watched=watched)
     return jsonify({"shows": shows, "count": len(shows)})
 
 
@@ -523,8 +548,11 @@ def api_get_all_media():
     favorite_only = request.args.get("favorite", "").lower() == "true"
     media_type = request.args.get("type", None)
     search = request.args.get("search", None)
+    watched = request.args.get("watched", None)
+    if watched is not None:
+        watched = watched.lower() == "true"
     all_items = database.get_all_media(
-        sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search
+        sort_by=sort_by, genre=genre, favorite_only=favorite_only, search=search, watched=watched
     )
     if media_type:
         all_items = [m for m in all_items if m.get("media_type") == media_type]
@@ -654,14 +682,14 @@ def api_update_settings():
 
 def open_browser():
     """延迟打开默认浏览器访问本地地址。"""
-    webbrowser.open("http://127.0.0.1:5000")
+    webbrowser.open(f"http://{_CFG_FLASK_HOST}:{_CFG_FLASK_PORT}")
 
 
 if __name__ == "__main__":
     logger.info("LocalPlayer 启动")
     print("=" * 50)
     print("  LocalPlayer — 本地媒体库管理工具")
-    print("  访问地址: http://127.0.0.1:5000")
+    print(f"  访问地址: http://{_CFG_FLASK_HOST}:{_CFG_FLASK_PORT}")
     print("  按 Ctrl+C 退出")
     print("=" * 50)
 
@@ -678,4 +706,4 @@ if __name__ == "__main__":
     # 启动后自动打开浏览器
     Timer(1.0, open_browser).start()
 
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host=_CFG_FLASK_HOST, port=_CFG_FLASK_PORT, debug=False)

@@ -17,3 +17,6 @@ logs/
 
 # Environment
 .env
+
+# Config (contains local paths)
+config.py

@@ -19,6 +19,8 @@ let currentFilter = "all";        // all | movie | tvshow | favorite
 let currentTVSeason = null;
 let currentTVScrollLeft = 0;
 let favoritesOnly = false;
+let currentWatched = "";         // "" = all, "true" = watched, "false" = unwatched
+let currentEpisodes = [];        // 当前电视剧的单集数据（用于季切换）
 let searchQuery = "";
 let _searchTimer = null;
 
@@ -143,6 +145,7 @@ async function loadPosterWall() {
     } else {
         url = `${API_BASE}/all_media?sort=${sortBy}&genre=${encodeURIComponent(genre)}`;
     }
+    if (currentWatched) url += `&watched=${currentWatched}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
 
     try {
@@ -223,13 +226,12 @@ async function renderPosterGrid(items) {
         const isMovie = m.media_type === "movie";
         if (m.is_watched !== undefined && !m.is_watched)
             badges += '<span class="badge badge-new">NEW</span>';
-        if (m.is_watched) badges += '<span class="badge badge-watched">&#10003; 已看</span>';
+        if (m.is_watched) badges += '<span class="badge badge-watched-circle"></span>';
         if (m.is_favorite) badges += '<span class="badge badge-favorite">&#9829;</span>';
 
         const fanartType = m.media_type === "movie" ? "movie" : "show";
         const fanartAttr = m.fanart_path ? ` data-fanart="${m.id}" data-fanart-type="${fanartType}"` : "";
 
-        const typeLabel = isMovie ? "" : '<span class="badge badge-tv">剧集</span>';
         const onClick = isMovie
             ? `event.stopPropagation(); openDetail(${m.id});`
             : `event.stopPropagation(); openTVShowDetail(${m.id});`;
@@ -239,7 +241,6 @@ async function renderPosterGrid(items) {
             <div class="card-img-wrapper">
                 ${imgHtml}
                 ${badges}
-                ${typeLabel}
             </div>
             <div class="card-info">
                 <div class="card-title">${escapeHtml(m.title)}</div>
@@ -579,6 +580,7 @@ async function openTVShowDetail(showId) {
 }
 
 function renderTVShow(show, episodes, seasons, targetSeason) {
+    currentEpisodes = episodes;
     const container = document.getElementById("tvshow-container");
     const posterUrl = `/api/show/${show.id}/poster`;
 
@@ -681,7 +683,7 @@ function renderTVShow(show, episodes, seasons, targetSeason) {
             const season = parseInt(tab.dataset.season);
             currentTVSeason = season;
             currentTVScrollLeft = 0;
-            document.getElementById("episode-list").innerHTML = buildEpisodeList(episodes, season);
+            document.getElementById("episode-list").innerHTML = buildEpisodeList(currentEpisodes, season);
             bindEpisodeActions();
         });
     });
@@ -827,6 +829,9 @@ async function toggleEpisodeWatched(episodeId) {
                 badge.classList.toggle("watched");
             }
         }
+        // 同步 currentEpisodes 数据，确保季切换后状态正确
+        const ep = currentEpisodes.find(function(e) { return e.id === episodeId; });
+        if (ep) ep.is_watched = result.is_watched;
         syncWatchedButtons(result);
     } catch (err) {
         console.error("切换单集已看状态失败:", err);
@@ -860,6 +865,25 @@ function syncWatchedButtons(result, isNowWatched) {
                 btn.title = "标记整季已看";
             }
         });
+    }
+
+    // 更新整剧已看按钮
+    const allCards = document.querySelectorAll(".ep-card");
+    let allShowWatched = allCards.length > 0;
+    allCards.forEach((c) => {
+        if (!c.classList.contains("ep-watched")) allShowWatched = false;
+    });
+    const showWatchedBtn = document.querySelector("#tvshow-container .btn-icon-action");
+    if (showWatchedBtn) {
+        if (allShowWatched) {
+            showWatchedBtn.classList.add("active");
+            showWatchedBtn.title = "整剧标记未看";
+        } else {
+            showWatchedBtn.classList.remove("active");
+            showWatchedBtn.title = "整剧标记已看";
+        }
+        // 更新图标
+        showWatchedBtn.innerHTML = iconWatched(allShowWatched);
     }
 }
 
@@ -1399,6 +1423,16 @@ function init() {
     // 搜索
     document.getElementById("search-input").addEventListener("input", handleSearchInput);
     document.getElementById("btn-search-clear").addEventListener("click", clearSearch);
+
+    // 已看/未看筛选按钮
+    document.querySelectorAll(".sidebar-watched").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".sidebar-watched").forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            currentWatched = btn.dataset.watched;
+            loadPosterWall();
+        });
+    });
 
     // 收藏筛选按钮
     document.getElementById("btn-nav-fav").addEventListener("click", toggleFavoritesFilter);

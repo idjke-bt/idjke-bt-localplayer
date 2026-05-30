@@ -1,0 +1,19 @@
+# Claude
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# Database
+*.db
+
+# Logs
+logs/
+
+# Environment
+.env

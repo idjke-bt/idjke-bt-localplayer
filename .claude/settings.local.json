@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(conda create *)",
+      "PowerShell(conda activate *)",
+      "PowerShell($body = @{media_roots = @\\(\"F:\\\\媒体库\\\\电影\"\\)} | ConvertTo-Json; Invoke-RestMethod -Uri \"http://127.0.0.1:5000/api/settings\" -Method Post -Body $body -ContentType \"application/json\" | ConvertTo-Json -Depth 5)",
+      "PowerShell($result = Invoke-RestMethod -Uri \"http://127.0.0.1:5000/api/scan\" -Method Post; Write-Host \"Total: $\\($result.total\\)\"; Write-Host \"Added: $\\($result.added\\)\"; Write-Host \"Updated: $\\($result.updated\\)\"; Write-Host \"Deleted: $\\($result.deleted\\)\"; Write-Host \"Errors: $\\($result.errors.Count\\)\"; if \\($result.errors.Count -gt 0\\) { $result.errors | ForEach-Object { Write-Host \"  Error: $_\" } })",
+      "PowerShell($response = Invoke-WebRequest -Uri \"http://127.0.0.1:5000/api/movies\" -Method Get; $response.Content | Select-Object -First 1)",
+      "PowerShell($posterPath = [uri]::EscapeDataString\\(\"F:\\\\媒体库\\\\电影\\\\肖申克的救赎 \\(1994\\)\\\\肖申克的救赎 \\(1994\\)-poster.jpg\"\\); $response = Invoke-WebRequest -Uri \"http://127.0.0.1:5000/poster?path=$posterPath\" -Method Get; Write-Host \"Status: $\\($response.StatusCode\\)\"; Write-Host \"Content-Type: $\\($response.Headers['Content-Type']\\)\"; Write-Host \"Size: $\\($response.RawContentLength\\) bytes\")",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(Start-Sleep -Seconds 3; $movies = Invoke-RestMethod -Uri \"http://127.0.0.1:5000/api/movies\" -Method Get; Write-Host \"Movies count: $\\($movies.count\\)\"; $m = $movies.movies[0]; Write-Host \"Movie 1: $\\($m.title\\) \\($\\($m.year\\)\\)\"; Write-Host \"Poster: $\\($m.poster_path.Substring\\($m.poster_path.Length-20\\)\\)\"; $posterEncoded = [uri]::EscapeDataString\\($m.poster_path\\); $imgResp = Invoke-WebRequest -Uri \"http://127.0.0.1:5000/poster?path=$posterEncoded\"; Write-Host \"Poster img status: $\\($imgResp.StatusCode\\) type: $\\($imgResp.Headers['Content-Type']\\) size: $\\($imgResp.RawContentLength\\)\")",
+      "PowerShell($result = Invoke-RestMethod -Uri \"http://127.0.0.1:5000/api/scan\" -Method Post; Write-Host \"Total: $\\($result.total\\) Added: $\\($result.added\\) Updated: $\\($result.updated\\) Deleted: $\\($result.deleted\\) Errors: $\\($result.errors.Count\\)\")",
+      "PowerShell(Start-Sleep -Seconds 3; $m = Invoke-RestMethod \"http://127.0.0.1:5000/api/movies\"; Write-Host \"Movies: $\\($m.count\\)\"; Write-Host \"Title: $\\($m.movies[0].title\\)\"; Write-Host \"Genre: $\\($m.movies[0].genre\\)\"; Write-Host \"Has poster: $\\(if\\($m.movies[0].poster_path\\){'yes'}else{'no'}\\)\"; $enc = [uri]::EscapeDataString\\($m.movies[0].poster_path\\); $img = Invoke-WebRequest \"http://127.0.0.1:5000/poster?path=$enc\"; Write-Host \"Poster: $\\($img.StatusCode\\) $\\($img.Headers['Content-Type']\\) $\\($img.RawContentLength\\)bytes\")"
+    ]
+  }
+}

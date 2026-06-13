@@ -724,9 +724,25 @@ SEASON_FOLDER_PATTERNS = [
     re.compile(r'^Season\s*(\d{1,2})$', re.IGNORECASE),
     re.compile(r'^S(\d{1,2})$', re.IGNORECASE),
 ]
+SPECIAL_SEASON_FOLDER_PATTERN = re.compile(r'^(?:Specials?|Season\s*0|S0{1,2})$', re.IGNORECASE)
 
 # 从文件名提取 SxxExx 的模式（要求前面是边界或分隔符）
 EPISODE_SXE_PATTERN = re.compile(r'(?:^|[_.\s\-])[Ss](\d{1,2})\s*[Ee](\d{1,2})(?!\d)')
+EPISODE_CODE_FRAGMENT_PATTERN = re.compile(r'^[Ss]\d{1,2}\s*[Ee]\d{1,4}$')
+
+
+def get_season_number_from_folder(folder_name):
+    if SPECIAL_SEASON_FOLDER_PATTERN.match(folder_name):
+        return 0
+    for pattern in SEASON_FOLDER_PATTERNS:
+        m = pattern.match(folder_name)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def get_episode_sxe_match(name):
+    return EPISODE_SXE_PATTERN.search(name)
 
 # 缩略图关键词
 THUMB_KEYWORDS = ["thumb", "thumbnail"]
@@ -741,7 +757,7 @@ def clean_episode_title(filename, season_num=None):
     3. 回退：\"第 N 集\"
     """
     name = os.path.splitext(filename)[0]
-    sxe_match = EPISODE_SXE_PATTERN.search(name)
+    sxe_match = get_episode_sxe_match(name)
     if not sxe_match:
         cleaned = clean_title(name)
         logger.debug("clean_episode_title(无SxxExx): name=%s → %s", filename, cleaned)
@@ -754,6 +770,8 @@ def clean_episode_title(filename, season_num=None):
     if after:
         # 去掉前导分隔符和数字（年份等）
         after = re.sub(r'^[\s.\-_–—]+', '', after)
+        after = re.sub(r'^[Ss]\d{1,2}\s*[Ee]\d{1,4}\s*', '', after)
+        after = re.sub(r'^[\s.\-_–—]+', '', after)
         after = re.sub(r'^((?:19|20)\d{2})\s*', '', after)
         after = re.sub(r'^[\s.\-_–—]+', '', after)
 
@@ -761,6 +779,8 @@ def clean_episode_title(filename, season_num=None):
         for part in parts:
             part = part.strip()
             if not part or re.match(r'^[\d.]+$', part):
+                continue
+            if EPISODE_CODE_FRAGMENT_PATTERN.match(part):
                 continue
             cleaned = clean_title(part)
             if cleaned and len(cleaned) >= 2 and not cleaned.isdigit():
@@ -944,11 +964,9 @@ def find_season_folders(tv_show_path):
         for entry in os.scandir(tv_show_path):
             if not entry.is_dir():
                 continue
-            for pattern in SEASON_FOLDER_PATTERNS:
-                m = pattern.match(entry.name)
-                if m:
-                    seasons.append((int(m.group(1)), entry.path))
-                    break
+            season_number = get_season_number_from_folder(entry.name)
+            if season_number is not None:
+                seasons.append((season_number, entry.path))
     except OSError:
         pass
     seasons.sort(key=lambda x: x[0])
@@ -1057,7 +1075,7 @@ def scan_tv_show(folder_path):
                 video_basename = os.path.splitext(entry.name)[0]
 
                 # 尝试从文件名提取 SxxExx
-                sxe_match = EPISODE_SXE_PATTERN.search(entry.name)
+                sxe_match = get_episode_sxe_match(entry.name)
                 ep_season = season_num
                 ep_number = 0
                 if sxe_match:

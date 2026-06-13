@@ -251,9 +251,9 @@ def _get_player_args(player_path):
     """
     basename = os.path.basename(player_path).lower()
     if "mpv" in basename:
-        return ["--ontop", "--fullscreen"]
+        return ["--fullscreen"]
     if "vlc" in basename:
-        return ["--fullscreen", "--video-on-top"]
+        return ["--fullscreen"]
     if "potplayer" in basename or "potplayermini" in basename:
         return ["/fullscreen"]
     return []

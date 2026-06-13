@@ -20,6 +20,7 @@ let currentTVSeason = null;
 let currentTVScrollLeft = 0;
 let favoritesOnly = false;
 let currentEpisodes = [];        // 当前电视剧的单集数据（用于季切换）
+let pendingEpisodeWatchedToggles = new Set();
 let searchQuery = "";
 let _searchTimer = null;
 
@@ -608,7 +609,7 @@ function renderTVShow(show, episodes, seasons, targetSeason) {
         const seasonAllWatched = seasonEps.length > 0 && seasonEps.every((ep) => ep.is_watched);
         return `
             <div class="season-tab-group">
-                <button class="season-tab" data-season="${s}">第 ${s} 季</button>
+                <button class="season-tab" data-season="${s}">${formatSeasonLabel(s)}</button>
                 <button class="season-watched-btn ${seasonAllWatched ? 'all-watched' : ''}"
                     onclick="event.stopPropagation(); toggleSeasonWatched(${show.id}, ${s})"
                     title="${seasonAllWatched ? '标记整季未看' : '标记整季已看'}">
@@ -701,6 +702,10 @@ function renderTVShow(show, episodes, seasons, targetSeason) {
 
     // 设置 fanart 背景
     setTVShowFanartBackground(show);
+}
+
+function formatSeasonLabel(season) {
+    return season === 0 ? "\u7279\u522b\u7bc7" : `\u7b2c ${season} \u5b63`;
 }
 
 function buildEpisodeList(episodes, season) {
@@ -804,6 +809,11 @@ async function playEpisode(episodeId) {
 }
 
 async function toggleEpisodeWatched(episodeId) {
+    if (pendingEpisodeWatchedToggles.has(episodeId)) {
+        return;
+    }
+    pendingEpisodeWatchedToggles.add(episodeId);
+
     // 保存当前滚动位置
     const epScroll = document.getElementById("ep-scroll");
     if (epScroll) currentTVScrollLeft = epScroll.scrollLeft;
@@ -839,13 +849,15 @@ async function toggleEpisodeWatched(episodeId) {
             card.classList.toggle("ep-watched");
             badge.classList.toggle("watched");
         }
+    } finally {
+        pendingEpisodeWatchedToggles.delete(episodeId);
     }
 }
 
 function syncWatchedButtons(result, isNowWatched) {
     if (!currentShowId) return;
     // 更新当前季按钮
-    if (currentTVSeason) {
+    if (currentTVSeason != null) {
         const seasonBtns = document.querySelectorAll(".season-watched-btn");
         seasonBtns.forEach((btn) => {
             const seasonGroup = btn.closest(".season-tab-group");
@@ -941,7 +953,7 @@ async function toggleSeasonWatched(showId, season) {
     try {
         const result = await apiPost(`${API_BASE}/shows/${showId}/seasons/${season}/watched`);
         const label = result.all_watched ? "已看" : "未看";
-        showToast(`第 ${season} 季已标记为${label}`, "success");
+        showToast(`${formatSeasonLabel(season)}已标记为${label}`, "success");
         const show = await apiGet(`${API_BASE}/shows/${showId}`);
         const epData = await apiGet(`${API_BASE}/shows/${showId}/episodes`);
         renderTVShow(show, epData.episodes, epData.seasons, season);

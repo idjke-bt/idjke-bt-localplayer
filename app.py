@@ -247,11 +247,11 @@ def detect_player():
 
 def _get_player_args(player_path):
     """
-    根据播放器类型返回全屏/置顶的 CLI 参数。
+    根据播放器类型返回启动参数。
     """
     basename = os.path.basename(player_path).lower()
     if "mpv" in basename:
-        return ["--fullscreen"]
+        return ["--fullscreen", "--focus-on-open=yes"]
     if "vlc" in basename:
         return ["--fullscreen"]
     if "potplayer" in basename or "potplayermini" in basename:

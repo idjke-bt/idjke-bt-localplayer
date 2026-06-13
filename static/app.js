@@ -609,7 +609,7 @@ function renderTVShow(show, episodes, seasons, targetSeason) {
         const seasonAllWatched = seasonEps.length > 0 && seasonEps.every((ep) => ep.is_watched);
         return `
             <div class="season-tab-group">
-                <button class="season-tab" data-season="${s}">${formatSeasonLabel(s)}</button>
+                <button class="season-tab" data-season="${s}">${formatSeasonLabel(s, episodes)}</button>
                 <button class="season-watched-btn ${seasonAllWatched ? 'all-watched' : ''}"
                     onclick="event.stopPropagation(); toggleSeasonWatched(${show.id}, ${s})"
                     title="${seasonAllWatched ? '标记整季未看' : '标记整季已看'}">
@@ -704,8 +704,13 @@ function renderTVShow(show, episodes, seasons, targetSeason) {
     setTVShowFanartBackground(show);
 }
 
-function formatSeasonLabel(season) {
-    return season === 0 ? "\u7279\u522b\u7bc7" : `\u7b2c ${season} \u5b63`;
+function formatSeasonLabel(season, episodes = currentEpisodes) {
+    const isSpecialsFolder = season === 0 && episodes.some((ep) => {
+        const path = (ep.video_path || "").replace(/\\/g, "/");
+        return /\/Specials\//i.test(path);
+    });
+    if (isSpecialsFolder) return "\u7279\u522b\u7bc7";
+    return `\u7b2c ${season} \u5b63`;
 }
 
 function buildEpisodeList(episodes, season) {
@@ -953,7 +958,7 @@ async function toggleSeasonWatched(showId, season) {
     try {
         const result = await apiPost(`${API_BASE}/shows/${showId}/seasons/${season}/watched`);
         const label = result.all_watched ? "已看" : "未看";
-        showToast(`${formatSeasonLabel(season)}已标记为${label}`, "success");
+        showToast(`${formatSeasonLabel(season, currentEpisodes)}已标记为${label}`, "success");
         const show = await apiGet(`${API_BASE}/shows/${showId}`);
         const epData = await apiGet(`${API_BASE}/shows/${showId}/episodes`);
         renderTVShow(show, epData.episodes, epData.seasons, season);

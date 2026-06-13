@@ -898,19 +898,28 @@ def parse_tvshow_nfo(nfo_path):
     return result
 
 
-def parse_episode_nfo(nfo_path):
-    """
-    解析 Kodi 格式的单集 NFO 文件 (<episodedetails>)。
-    返回 dict: title, plot, rating, season, episode, runtime
-    """
+def _read_episode_nfo_root(nfo_path):
     try:
         tree = ET.parse(nfo_path)
-        root = tree.getroot()
-    except (ET.ParseError, FileNotFoundError):
-        return {}
+        return tree.getroot()
+    except FileNotFoundError:
+        return None
+    except ET.ParseError:
+        try:
+            with open(nfo_path, "r", encoding="utf-8-sig") as f:
+                text = f.read()
+        except OSError:
+            return None
+        text = re.sub(r'^\s*<\?xml[^>]*\?>', '', text)
+        try:
+            return ET.fromstring(f"<episodes>{text}</episodes>")
+        except ET.ParseError:
+            logger.debug("parse_episode_nfo: 无法解析 NFO, path=%s", nfo_path)
+            return None
 
+
+def _episode_nfo_to_dict(ep_elem):
     result = {}
-    ep_elem = root if root.tag == "episodedetails" else root
 
     simple_tags = {
         "title": "title",
@@ -930,7 +939,6 @@ def parse_episode_nfo(nfo_path):
                     val = 0
             result[key] = val
 
-    # 评分
     rating = ""
     ratings_elem = ep_elem.find("ratings")
     if ratings_elem is not None:
@@ -944,6 +952,34 @@ def parse_episode_nfo(nfo_path):
         if elem is not None and elem.text:
             rating = elem.text.strip()
     result["rating"] = rating
+
+    return result
+
+
+def parse_episode_nfo(nfo_path, expected_season=None, expected_episode=None):
+    """
+    解析 Kodi 格式的单集 NFO 文件 (<episodedetails>)。
+    返回 dict: title, plot, rating, season, episode, runtime
+    """
+    root = _read_episode_nfo_root(nfo_path)
+    if root is None:
+        return {}
+
+    candidates = [root] if root.tag == "episodedetails" else root.findall("episodedetails")
+    if not candidates:
+        candidates = [root]
+
+    result = {}
+    if expected_season is not None and expected_episode is not None:
+        for ep_elem in candidates:
+            candidate = _episode_nfo_to_dict(ep_elem)
+            if (candidate.get("season") == expected_season and
+                    candidate.get("episode") == expected_episode):
+                result = candidate
+                break
+
+    if not result:
+        result = _episode_nfo_to_dict(candidates[0])
 
     if not result.get("title"):
         logger.debug("parse_episode_nfo: 无title字段, path=%s", nfo_path)
@@ -1088,7 +1124,7 @@ def scan_tv_show(folder_path):
 
                 # 查找配套文件
                 nfo_path_ep = find_nfo_for_episode(season_path, video_basename)
-                ep_nfo = parse_episode_nfo(nfo_path_ep) if nfo_path_ep else {}
+                ep_nfo = parse_episode_nfo(nfo_path_ep, ep_season, ep_number) if nfo_path_ep else {}
 
                 # 标题优先级：NFO title > 从文件名智能提取 > 清理后的文件名
                 if ep_nfo.get("title"):

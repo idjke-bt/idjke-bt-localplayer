@@ -251,12 +251,37 @@ def _get_player_args(player_path):
     """
     basename = os.path.basename(player_path).lower()
     if "mpv" in basename:
-        return ["--fullscreen", "--focus-on-open=yes"]
+        return ["--fullscreen", "--focus-on=open"]
     if "vlc" in basename:
         return ["--fullscreen"]
     if "potplayer" in basename or "potplayermini" in basename:
         return ["/fullscreen"]
     return []
+
+
+def _launch_player(player_path, video_path):
+    args = [player_path] + _get_player_args(player_path) + [video_path]
+    proc = subprocess.Popen(
+        args,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        cwd=os.path.dirname(player_path) or None,
+    )
+    try:
+        return_code = proc.wait(timeout=0.8)
+    except subprocess.TimeoutExpired:
+        if proc.stderr:
+            proc.stderr.close()
+        return
+
+    if proc.stderr:
+        stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
+        proc.stderr.close()
+    else:
+        stderr = ""
+    if return_code != 0:
+        detail = stderr or f"播放器进程退出，返回码 {return_code}"
+        raise RuntimeError(detail)
 
 
 # ===========================================================================
@@ -319,12 +344,7 @@ def api_play_movie(movie_id):
             }), 500
 
     try:
-        args = [player_path] + _get_player_args(player_path) + [video_path]
-        subprocess.Popen(
-            args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        _launch_player(player_path, video_path)
         database.mark_as_played(movie_id)
         logger.info("播放电影: %s (player=%s)", movie['title'], player_path)
         return jsonify({"status": "ok", "message": f"正在播放: {movie['title']}", "player": player_path})
@@ -453,14 +473,8 @@ def api_play_episode(episode_id):
             }), 500
 
     try:
-        args = [player_path] + _get_player_args(player_path) + [video_path]
-        subprocess.Popen(
-            args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        # 标记为已看
-        database.toggle_episode_watched(episode_id)
+        _launch_player(player_path, video_path)
+        database.mark_episode_watched(episode_id)
         logger.info("播放单集: %s (player=%s)", episode.get('title', ''), player_path)
         return jsonify({"status": "ok", "message": f"正在播放: {episode.get('title', '')}", "player": player_path})
     except Exception as e:

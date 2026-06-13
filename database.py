@@ -590,6 +590,19 @@ def toggle_episode_watched(episode_id):
     return new_val
 
 
+def mark_episode_watched(episode_id):
+    conn = get_connection()
+    row = conn.execute("SELECT id FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    now = datetime.now().isoformat()
+    conn.execute("UPDATE episodes SET is_watched = 1, updated_at = ? WHERE id = ?", (now, episode_id))
+    conn.commit()
+    conn.close()
+    return 1
+
+
 def get_show_seasons(show_id):
     conn = get_connection()
     rows = conn.execute(

@@ -10,7 +10,9 @@ import os
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 import webbrowser
 from threading import Timer
 
@@ -259,26 +261,106 @@ def _get_player_args(player_path):
     return []
 
 
+def _find_windows_for_pid(pid):
+    if os.name != "nt":
+        return []
+
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    windows = []
+
+    enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    @enum_proc
+    def callback(hwnd, _lparam):
+        window_pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(window_pid))
+        if window_pid.value == pid and user32.IsWindowVisible(hwnd):
+            windows.append(hwnd)
+        return True
+
+    user32.EnumWindows(callback, 0)
+    return windows
+
+
+def _bring_window_to_front(hwnd):
+    if os.name != "nt":
+        return
+
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    SW_SHOW = 5
+    HWND_TOPMOST = -1
+    HWND_NOTOPMOST = -2
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+
+    current_thread = kernel32.GetCurrentThreadId()
+    target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+    foreground_hwnd = user32.GetForegroundWindow()
+    foreground_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None) if foreground_hwnd else 0
+    attached_threads = []
+
+    for thread_id in {target_thread, foreground_thread}:
+        if thread_id and thread_id != current_thread:
+            if user32.AttachThreadInput(current_thread, thread_id, True):
+                attached_threads.append(thread_id)
+
+    try:
+        user32.ShowWindow(hwnd, SW_SHOW)
+        flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
+        user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags)
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        for thread_id in attached_threads:
+            user32.AttachThreadInput(current_thread, thread_id, False)
+
+
+def _focus_player_window(proc, timeout=3.0):
+    if os.name != "nt":
+        return
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        windows = _find_windows_for_pid(proc.pid)
+        if windows:
+            _bring_window_to_front(windows[0])
+            return
+        if proc.poll() is not None:
+            return
+        time.sleep(0.1)
+
+
 def _launch_player(player_path, video_path):
     args = [player_path] + _get_player_args(player_path) + [video_path]
-    proc = subprocess.Popen(
-        args,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        cwd=os.path.dirname(player_path) or None,
-    )
+    stderr_file = tempfile.TemporaryFile()
+    try:
+        proc = subprocess.Popen(
+            args,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_file,
+            cwd=os.path.dirname(player_path) or None,
+        )
+    except Exception:
+        stderr_file.close()
+        raise
     try:
         return_code = proc.wait(timeout=0.8)
     except subprocess.TimeoutExpired:
-        if proc.stderr:
-            proc.stderr.close()
+        _focus_player_window(proc)
+        stderr_file.close()
         return
 
-    if proc.stderr:
-        stderr = proc.stderr.read().decode("utf-8", errors="replace").strip()
-        proc.stderr.close()
-    else:
-        stderr = ""
+    stderr_file.seek(0)
+    stderr = stderr_file.read().decode("utf-8", errors="replace").strip()
+    stderr_file.close()
     if return_code != 0:
         detail = stderr or f"播放器进程退出，返回码 {return_code}"
         raise RuntimeError(detail)
